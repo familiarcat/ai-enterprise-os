@@ -1,0 +1,1 @@
+module.exports.generate = (p)=>`Email for ${p}`

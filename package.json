@@ -1,0 +1,10 @@
+{
+  "name": "v28.2-integrated",
+  "private": true,
+  "scripts": {
+    "dev": "node apps/api/server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

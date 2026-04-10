@@ -1,0 +1,1 @@
+module.exports.generate = (p)=>`Ad for ${p}`

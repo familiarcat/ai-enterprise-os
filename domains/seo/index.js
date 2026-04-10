@@ -1,0 +1,1 @@
+module.exports.generate = (t)=>`SEO content for ${t}`
