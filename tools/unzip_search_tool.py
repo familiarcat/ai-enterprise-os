@@ -36,7 +36,7 @@ class UnzipSearchTool(BaseTool):
             return f"Error: Path not found at {path}"
 
         exclude_dirs = exclude_dirs or ["node_modules", ".git", "__pycache__", "venv", "dist", "build"]
-        include_exts = include_exts or [".py", ".js", ".ts", ".jsx", ".tsx"]
+        include_exts = include_exts or [".py", ".js", ".ts", ".jsx", ".tsx", ".md", ".sh"]
 
         # Create a temporary directory for extraction
         temp_dir = tempfile.mkdtemp()
@@ -80,7 +80,8 @@ class UnzipSearchTool(BaseTool):
                     rf"^{function_name}\s*="
                 ]
             else:
-                # Matches: 'def func(', 'function func(', 'const func = () =>', 'async function func(', 'const func = arg =>', 'func: function(', 'exports.func ='
+                # Matches: Python def, JS/TS functions, Arrow functions, Object properties, 
+                # Shell functions, and Markdown headers.
                 patterns = [
                     rf"def\s+{function_name}\s*\(",
                     rf"(?:async\s+)?function\s+{function_name}\s*\(",
@@ -90,7 +91,9 @@ class UnzipSearchTool(BaseTool):
                     rf"[\w$.]+\.{function_name}\s*=\s*(?:async\s+)?(?:function\b|(?:\([^)]*\)|[a-zA-Z_$][\w$]*)\s*=>)",
                     rf"Object\.defineProperty\s*\(\s*[\w$.]+\s*,\s*['\"]{function_name}['\"]",
                     rf"^\s*(?:(?:public|private|protected|static|readonly)\s+)*{function_name}\s*=\s*(?:async\s+)?(?:\([^)]*\)|[a-zA-Z_$][\w$]*)\s*=>",
-                    rf"\[\s*['\"]{function_name}['\"]\s*\]\s*(?:\(|:\s*(?:async\s+)?(?:function\b|(?:\([^)]*\)|[a-zA-Z_$][\w$]*)\s*=>))"
+                    rf"\[\s*['\"]{function_name}['\"]\s*\]\s*(?:\(|:\s*(?:async\s+)?(?:function\b|(?:\([^)]*\)|[a-zA-Z_$][\w$]*)\s*=>))",
+                    rf"^\s*(?:function\s+)?{function_name}\s*(?:\(\s*\))?\s*\{",
+                    rf"^#+\s+{function_name}\b"
                 ]
 
             combined_pattern = re.compile("|".join(patterns))
@@ -204,8 +207,21 @@ class UnzipSearchTool(BaseTool):
                     return "".join(block), line
                 block.append(line)
             return "".join(block), None
+        elif extension == '.md':
+            header_match = re.match(r'^(#+)', first_line)
+            level = len(header_match.group(1)) if header_match else 0
+            for i, line in enumerate(iterator, 1):
+                if i > max_lines:
+                    block.append("\n... [Max lines reached] ...")
+                    return "".join(block), None
+                if level > 0:
+                    next_header = re.match(r'^(#+)', line)
+                    if next_header and len(next_header.group(1)) <= level:
+                        return "".join(block), line
+                block.append(line)
+            return "".join(block), None
         else:
-            # Logic for JS/TS (Brace/Paren counting)
+            # Logic for JS/TS/SH (Brace/Paren counting)
             open_char, close_char = '{', '}'
             is_arrow = "=>" in first_line
             
@@ -265,12 +281,13 @@ class UnzipSearchTool(BaseTool):
 
 if __name__ == "__main__":
     import sys
-    if len(sys.argv) > 1:
-        try:
-            # Expecting a JSON string as the first argument
-            args = json.loads(sys.argv[1])
+    try:
+        # Read JSON from stdin to support larger input payloads without shell limits
+        input_data = sys.stdin.read().strip()
+        if input_data:
+            args = json.loads(input_data)
             tool = UnzipSearchTool()
             print(tool._run(**args))
-        except Exception as e:
-            sys.stderr.write(f"Tool Error: {str(e)}")
-            sys.exit(1)
+    except Exception as e:
+        sys.stderr.write(f"Tool Error: {str(e)}\n")
+        sys.exit(1)

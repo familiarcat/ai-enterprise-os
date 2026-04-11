@@ -1,0 +1,29 @@
+name: Sovereign Factory CI/CD
+on: [push, pull_request]
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+      - name: Install Dependencies
+        run: |
+          pnpm install
+          pip install pydantic crewai
+      - name: Run Tests
+        run: pnpm test
+      - name: Deploy Business Units
+        run: echo "Deploying generated DDD domains..."
