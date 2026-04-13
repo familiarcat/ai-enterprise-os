@@ -15,4 +15,10 @@ app.post("/run", async (req,res)=>{
   res.json({ mission, capital, revenue: rev })
 })
 
+app.post("/dashboard/init", async (req, res) => {
+  // Trigger a mission specifically to bootstrap the dashboard structure
+  const result = await runMission(".", "create new Dashboard");
+  res.json({ status: "Dashboard infrastructure scaffolded", result });
+});
+
 app.listen(3001, ()=>console.log("v28.2 running"))

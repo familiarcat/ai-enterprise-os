@@ -1,16 +1,39 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
-const os = require('os');
-const { createClient } = require('@supabase/supabase-js');
-const Redis = require('ioredis');
 
-// Initialize Memory Systems
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-const supabase = createClient(
-  process.env.SUPABASE_URL || '',
-  process.env.SUPABASE_KEY || ''
-);
+/**
+ * Lazy-load Memory Systems to allow structural tasks without DB drivers
+ */
+let _redis = null;
+let _supabase = null;
+
+/**
+ * Resets the lazy-loaded memory systems.
+ * Used primarily for unit testing isolation.
+ */
+function resetMemorySystems() {
+  if (_redis) {
+    try { _redis.quit(); } catch (e) {}
+    _redis = null;
+  }
+  _supabase = null;
+}
+
+function getMemorySystems() {
+  if (!_redis) {
+    const Redis = require('ioredis');
+    _redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+  }
+  if (!_supabase) {
+    const { createClient } = require('@supabase/supabase-js');
+    _supabase = createClient(
+      process.env.SUPABASE_URL || '',
+      process.env.SUPABASE_KEY || ''
+    );
+  }
+  return { redis: _redis, supabase: _supabase };
+}
 
 /**
  * Agent Role Definitions
@@ -19,7 +42,8 @@ const ROLES = {
   ANALYST: "You are an Expert System Analyst. Your goal is to review project evolution and structure to identify patterns.",
   ARCHITECT: "You are a DDD Architect. Your goal is to validate mission objectives against historical constraints.",
   DEVELOPER: "You are a Senior Full-Stack Developer. Your goal is to generate clean, production-ready DDD code blocks.",
-  QA_AUDITOR: "You are a Senior QA Auditor. Your goal is to review past mission outcomes and evolutionary history to provide specific technical suggestions for improving the current scaffolding plan."
+  QA_AUDITOR: "You are a Senior QA Auditor. Your goal is to review past mission outcomes and evolutionary history to provide specific technical suggestions for improving the current scaffolding plan.",
+  CREW_MANAGER: "You are a CrewAI Manager. Your goal is to coordinate specialized agents (Analyst, Architect, Developer) into a cohesive process to satisfy the mission objective."
 };
 
 /**
@@ -75,6 +99,48 @@ function invokeUnzipSearchTool(options) {
   });
 }
 
+/**
+ * Bridge to invoke a Python-based CrewAI agent.
+ * Handles complex agentic workflows using the CrewAI framework.
+ * 
+ * @param {Object} options - Task and agent configuration.
+ * @returns {Promise<string>} The result of the Crew operation.
+ */
+function invokeCrewAgent(options) {
+  return new Promise((resolve, reject) => {
+    const scriptPath = path.resolve(__dirname, '../tools/crew_manager.py');
+    const jsonArgs = JSON.stringify(options);
+    const child = spawn('python3', [scriptPath]);
+
+    const maxSeconds = options.max_seconds || 60;
+    const timeoutHandle = setTimeout(() => {
+      if (child.kill()) {
+        reject(new Error(`CrewAgent timed out after ${maxSeconds}s.`));
+      }
+    }, maxSeconds * 1000);
+
+    child.stdin.write(jsonArgs);
+    child.stdin.end();
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout.on('data', (data) => { stdout += data.toString(); });
+    child.stderr.on('data', (data) => { stderr += data.toString(); });
+
+    child.on('close', (code) => {
+      clearTimeout(timeoutHandle);
+      if (code === 0) resolve(stdout);
+      else reject(new Error(`CrewAgent failed: ${stderr}`));
+    });
+
+    child.on('error', (err) => {
+      clearTimeout(timeoutHandle);
+      reject(new Error(`Failed to start CrewAgent: ${err.message}`));
+    });
+  });
+}
+
 async function runMission(project, objective){
   const versionsPath = path.resolve(__dirname, '../versions');
   const projectPath = path.resolve(__dirname, '..');
@@ -84,7 +150,7 @@ async function runMission(project, objective){
     invokeUnzipSearchTool({
       path: project,
       function_name: 'Setup',
-      include_exts: ['.md'],
+      include_exts: ['.md', '.ts', '.tsx'],
       item_type: 'constant' // Look for setup constants or headers
     }),
     invokeUnzipSearchTool({
@@ -113,6 +179,12 @@ async function runMission(project, objective){
     const name = objective.split(' ').pop();
     const lockKey = `factory:lock:domain:${name.toLowerCase()}`;
 
+    // If the objective is to initialize the dashboard, use specific backbone
+    if (name.toLowerCase() === 'dashboard') {
+      await enforceBackboneStructure(path.resolve(projectPath, 'apps/dashboard'), 'dashboard', 'Dashboard');
+    }
+
+    const { redis } = getMemorySystems();
     // Redis-based locking mechanism to prevent duplicate scaffolding
     const acquired = await redis.set(lockKey, 'locked', 'NX', 'EX', 60);
     
@@ -146,6 +218,7 @@ async function runMission(project, objective){
  */
 async function recallMemory(objective) {
   try {
+    const { supabase } = getMemorySystems();
     // 1. Generate an embedding for the current objective
     const embedding = await generateEmbedding(objective);
     if (!embedding) return "Memory recall unavailable (embedding failed).";
@@ -217,6 +290,7 @@ Keep suggestions concise.
  */
 async function storeMissionResult(content, metadata = {}) {
   try {
+    const { supabase } = getMemorySystems();
     const embedding = await generateEmbedding(content);
     if (!embedding) return;
 
@@ -322,32 +396,23 @@ Return ONLY the raw JSON object. Do not include markdown code blocks, explanatio
  * Scaffolds a new DDD and React component structure based on the mission objective.
  */
 async function scaffoldDDDComponent(name, generatedLayers = {}) {
-  const base = path.resolve(__dirname, `../domains/${name.toLowerCase()}`);
-  
-  // Create package.json for the domain to enable pnpm workspace integration
-  if (!fs.existsSync(base)) {
-    fs.mkdirSync(base, { recursive: true });
-    const pkgJson = {
-      name: `@domains/${name.toLowerCase()}`,
-      version: "1.0.0",
-      private: true,
-      dependencies: {
-        "@sovereign/shared": "workspace:*"
-      }
-    };
-    fs.writeFileSync(path.join(base, 'package.json'), JSON.stringify(pkgJson, null, 2));
-  }
+  const targetPath = path.resolve(__dirname, `../domains/${name.toLowerCase()}`);
+
+  // Apply the Universal Backbone Structure to the new domain
+  await enforceBackboneStructure(targetPath, 'domain', name);
 
   // Define the full DDD layer structure
   const layers = {
     'domain': 'model.js',
     'application': 'service.js',
     'infrastructure': 'repository.js',
-    'ui': `${name}.jsx`
+    'ui': `${name}.tsx`,
+    'tests': `${name.toLowerCase()}.test.js`,
+    'docs': 'architecture.md'
   };
   
   for (const [dir, fileName] of Object.entries(layers)) {
-    const dirPath = path.join(base, dir);
+    const dirPath = path.join(targetPath, dir);
     if (!fs.existsSync(dirPath)) {
       fs.mkdirSync(dirPath, { recursive: true });
     }
@@ -359,7 +424,7 @@ async function scaffoldDDDComponent(name, generatedLayers = {}) {
       if (generatedLayers[dir]) {
         fileContent = generatedLayers[dir];
       } else if (dir === 'ui') {
-        fileContent = `export const ${name} = () => <div className="p-4 border">Generated ${name} UI Component</div>;`;
+        fileContent = `import React from 'react';\n\nexport const ${name}: React.FC = () => <div className="p-4 border">Generated ${name} UI Component</div>;`;
       } else {
         // Generate boilerplate for other layers
         fileContent = generateLayerBoilerplate(dir, name);
@@ -368,6 +433,83 @@ async function scaffoldDDDComponent(name, generatedLayers = {}) {
       fs.writeFileSync(filePath, fileContent);
     }
   }
+}
+
+/**
+ * Universal Backbone Enforcer
+ * Organizes any path into a standardized project or domain structure.
+ * Inspired by openrouter-crew-platform patterns.
+ * 
+ * @param {string} targetPath - The absolute path to organize.
+ * @param {string} type - 'master' or 'domain'.
+ * @param {string} name - The display name for the entity.
+ */
+async function enforceBackboneStructure(targetPath, type = 'domain', name = 'SovereignEntity') {
+  const layouts = {
+    master: {
+      dirs: ['docs', 'scripts', 'packages/shared', 'packages/ui', 'core', 'tools', 'domains', 'apps/api', 'versions'],
+      files: {
+        'README.md': `# Sovereign Factory Master\nAutomated Enterprise OS inspired by OpenRouter Crew Platform.`,
+        'pnpm-workspace.yaml': "packages:\n  - 'apps/*'\n  - 'domains/*'\n  - 'packages/*'\n  - 'core'",
+        'apps/api/package.json': JSON.stringify({
+          name: "@apps/api",
+          version: "1.0.0",
+          private: true,
+          dependencies: {
+            "express": "^4.18.2",
+            "dotenv": "^16.4.5",
+            "@sovereign/shared": "workspace:*",
+            "@modelcontextprotocol/sdk": "^0.6.0"
+          }
+        }, null, 2)
+      }
+    },
+    dashboard: {
+      dirs: ['src/components', 'src/pages', 'src/hooks', 'src/styles', 'public'],
+      files: {
+        'next.config.js': "module.exports = { reactStrictMode: true };",
+        'tailwind.config.js': "module.exports = { content: ['./src/**/*.{js,ts,jsx,tsx}'], theme: { extend: {} }, plugins: [] };",
+        'tsconfig.json': JSON.stringify({
+          compilerOptions: { target: "es5", lib: ["dom", "dom.iterable", "esnext"], allowJs: true, skipLibCheck: true, strict: true, forceConsistentCasingInFileNames: true, noEmit: true, esModuleInterop: true, module: "esnext", moduleResolution: "node", resolveJsonModule: true, isolatedModules: true, jsx: "preserve", incremental: true },
+          include: ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
+          exclude: ["node_modules"]
+        }, null, 2)
+      }
+    },
+    domain: {
+      dirs: ['domain', 'application', 'infrastructure', 'ui', 'tests', 'docs', 'tools'],
+      files: {
+        'README.md': `# ${name} Domain\nAutonomous business unit generated by the Sovereign Factory.`,
+        'package.json': JSON.stringify({
+          name: `@domains/${name.toLowerCase()}`,
+          version: "1.0.0",
+          private: true,
+          dependencies: { "@sovereign/shared": "workspace:*" }
+        }, null, 2),
+        '.gitignore': "node_modules\n/dist\n.env\n.DS_Store",
+        'vitest.config.js': "import { defineConfig } from 'vitest/config';\n\nexport default defineConfig({\n  test: {\n    environment: 'node',\n    globals: true,\n  },\n});"
+      }
+    }
+  };
+
+  const layout = layouts[type] || layouts.domain;
+
+  // 1. Ensure Directory Structure
+  layout.dirs.forEach(dir => {
+    const dirPath = path.join(targetPath, dir);
+    if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
+  });
+
+  // 2. Ensure Vital Backbone Files
+  Object.entries(layout.files).forEach(([file, content]) => {
+    const filePath = path.join(targetPath, file);
+    let shouldWrite = !fs.existsSync(filePath);
+    if (!shouldWrite) {
+      const existing = fs.readFileSync(filePath, 'utf-8').trim();
+      if (existing === "" || existing === "{}") shouldWrite = true;
+    }
+    if (shouldWrite) fs.writeFileSync(filePath, content);
+  });
 }
 
 function generateLayerBoilerplate(layer, name) {
@@ -427,7 +569,32 @@ export const save${pascalName} = async (entity) => {
   return new Promise((resolve) => {
     setTimeout(() => resolve(true), 150);
   });
-};`
+};`,
+    tests: `import { describe, it, expect } from 'vitest';
+import { ${pascalName} } from '../domain/model';
+
+describe('${pascalName} Domain', () => {
+  it('should initialize correctly', () => {
+    const entity = new ${pascalName}({ id: 'test-123' });
+    expect(entity.id).toBe('test-123');
+    expect(entity.state).toBe('initial');
+  });
+
+  it('should process logic', () => {
+    const entity = new ${pascalName}({ id: 'test-123' });
+    entity.process();
+    expect(entity.state).toBe('processed');
+  });
+});`,
+    docs: `# ${pascalName} Domain Documentation
+
+This document describes the architectural decisions and implementation details for the ${name} business unit.
+
+## Responsibilities
+- Encapsulates ${name} business rules within the Domain Entity.
+- Provides a unified API via the Application Service.
+- Manages persistence and external integrations through the Infrastructure Repository.
+`
   };
   return templates[layer] || "";
 }
@@ -587,4 +754,4 @@ async function getVersionsHierarchy() {
   return hierarchy;
 }
 
-module.exports = { runMission, invokeUnzipSearchTool, runMissions, analyzeEvolution, scaffoldDDDComponent, storeMissionResult, getVersionsHierarchy }
+module.exports = { runMission, invokeUnzipSearchTool, invokeCrewAgent, runMissions, analyzeEvolution, scaffoldDDDComponent, storeMissionResult, getVersionsHierarchy, recallMemory, auditPastMissions, enforceBackboneStructure, getMemorySystems, resetMemorySystems }

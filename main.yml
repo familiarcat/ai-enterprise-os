@@ -5,6 +5,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      REDIS_URL: ${{ secrets.REDIS_URL }}
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node.js
