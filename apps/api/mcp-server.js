@@ -1,7 +1,10 @@
 const { Server } = require("@modelcontextprotocol/sdk/server/index.js");
 const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js");
 const { CallToolRequestSchema, ListToolsRequestSchema } = require("@modelcontextprotocol/sdk/types.js");
-const { invokeUnzipSearchTool, runMission, runMissions, getVersionsHierarchy } = require("../../core/orchestrator.js");
+const { 
+  invokeUnzipSearchTool, runMission, runMissions, getVersionsHierarchy, 
+  manageProject, manageSprint, manageTask, invokeCrewAgent 
+} = require("../../core/orchestrator.js");
 
 const server = new Server({
   name: "sovereign-factory",
@@ -72,6 +75,70 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         type: "object",
         properties: {}
       }
+    },
+    {
+      name: "manage_project",
+      description: "Initialize or update project-level metadata and context.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          project: { type: "string" },
+          action: { type: "string", enum: ["create", "update", "archive"] },
+          details: { type: "object" }
+        },
+        required: ["project", "action"]
+      }
+    },
+    {
+      name: "manage_sprint",
+      description: "Manage Agile sprints (create, start, or close) within a project.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          project: { type: "string" },
+          action: { type: "string", enum: ["create", "start", "close"] },
+          sprint_name: { type: "string" },
+          details: { type: "object" }
+        },
+        required: ["project", "action", "sprint_name"]
+      }
+    },
+    {
+      name: "manage_task",
+      description: "Create, move, or assign tasks within a project or sprint.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          project: { type: "string" },
+          action: { type: "string", enum: ["create", "assign", "move", "complete"] },
+          task_id: { type: "string" },
+          details: { type: "object" }
+        },
+        required: ["project", "action"]
+      }
+    },
+    {
+      name: "run_crew_agent",
+      description: "Execute a complex multi-agent workflow using the CrewAI framework.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          objective: { type: "string" },
+          agents: { 
+            type: "array",
+            items: { type: "object" } 
+          }
+        },
+        required: ["objective", "agents"]
+      }
+    },
+    {
+      name: "health_check",
+      description: "Verify the integrity of the workspace, environment variables, and memory systems.",
+      inputSchema: {
+        type: "object",
+        properties: {}
+      }
     }
   ]
 }));
@@ -104,10 +171,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     });
   } else if (name === "get_versions_hierarchy") {
     result = await getVersionsHierarchy();
+  } else if (name === "manage_project") {
+    result = await manageProject(args.project, args.action, args.details);
+  } else if (name === "manage_sprint") {
+    result = await manageSprint(args.project, args.action, args.sprint_name, args.details);
+  } else if (name === "manage_task") {
+    result = await manageTask(args.project, args.action, args.task_id, args.details);
+  } else if (name === "run_crew_agent") {
+    result = await invokeCrewAgent(args);
+  } else if (name === "health_check") {
+    const { spawnSync } = require('child_process');
+    const check = spawnSync('zsh', [path.resolve(__dirname, '../../scripts/verify_health.sh')]);
+    result = {
+      status: check.status === 0 ? "healthy" : "degraded",
+      report: check.stdout.toString()
+    };
   }
 
   return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
 });
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
+async function main() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}
+
+main().catch((error) => {
+  console.error("MCP Server Error:", error);
+  process.exit(1);
+});

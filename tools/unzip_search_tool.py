@@ -92,7 +92,7 @@ class UnzipSearchTool(BaseTool):
                     rf"Object\.defineProperty\s*\(\s*[\w$.]+\s*,\s*['\"]{function_name}['\"]",
                     rf"^\s*(?:(?:public|private|protected|static|readonly)\s+)*{function_name}\s*=\s*(?:async\s+)?(?:\([^)]*\)|[a-zA-Z_$][\w$]*)\s*=>",
                     rf"\[\s*['\"]{function_name}['\"]\s*\]\s*(?:\(|:\s*(?:async\s+)?(?:function\b|(?:\([^)]*\)|[a-zA-Z_$][\w$]*)\s*=>))",
-                    rf"^\s*(?:function\s+)?{function_name}\s*(?:\(\s*\))?\s*{{",
+                    rf"^\s*(?:function\s+)?{function_name}\s*(?:\(\s*\))?\s*\{{",
                     rf"^#+\s+{function_name}\b"
                 ]
 

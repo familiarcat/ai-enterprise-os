@@ -1,11 +1,13 @@
 {
-  "name": "v28.2-integrated",
+  "name": "ai-enterprise-os-root",
   "private": true,
   "packageManager": "pnpm@8.15.4",
   "scripts": {
     "dev": "node apps/api/server.js",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "mcp": "node apps/api/mcp-server.js",
+    "mcp:inspect": "npx @modelcontextprotocol/inspector node apps/api/mcp-server.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.6.0",
@@ -15,6 +17,13 @@
     "ioredis": "^5.3.2"
   },
   "devDependencies": {
-    "vitest": "^1.6.1"
-  }
+    "vitest": "^1.6.1",
+    "turbo": "^1.10.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "domains/*",
+    "core"
+  ]
 }

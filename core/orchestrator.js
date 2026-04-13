@@ -754,4 +754,35 @@ async function getVersionsHierarchy() {
   return hierarchy;
 }
 
-module.exports = { runMission, invokeUnzipSearchTool, invokeCrewAgent, runMissions, analyzeEvolution, scaffoldDDDComponent, storeMissionResult, getVersionsHierarchy, recallMemory, auditPastMissions, enforceBackboneStructure, getMemorySystems, resetMemorySystems }
+/**
+ * Project Management: Manage Project Context
+ */
+async function manageProject(project, action, details = {}) {
+  const objective = `${action} project context for "${project}" with details: ${JSON.stringify(details)}`;
+  return await runMission(project, objective);
+}
+
+/**
+ * Project Management: Manage Agile Sprint
+ */
+async function manageSprint(project, action, sprintName, details = {}) {
+  const objective = `${action} sprint "${sprintName}" for project "${project}"`;
+  return await runMission(project, objective);
+}
+
+/**
+ * Project Management: Manage Task
+ */
+async function manageTask(project, action, taskId, details = {}) {
+  const identifier = taskId || "new task";
+  const objective = `${action} task "${identifier}" for project "${project}" with details: ${JSON.stringify(details)}`;
+  return await runMission(project, objective);
+}
+
+module.exports = { 
+  runMission, invokeUnzipSearchTool, invokeCrewAgent, runMissions, 
+  analyzeEvolution, scaffoldDDDComponent, storeMissionResult, 
+  getVersionsHierarchy, recallMemory, auditPastMissions, 
+  enforceBackboneStructure, getMemorySystems, resetMemorySystems,
+  manageProject, manageSprint, manageTask
+}
