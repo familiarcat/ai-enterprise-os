@@ -1,0 +1,69 @@
+# ── Environment / secrets ──────────────────────────────────────────────────────
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
+.env.staging
+*.env
+
+# Keep the example template
+!.env.example
+
+# ── Python ────────────────────────────────────────────────────────────────────
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+
+# ── Node ──────────────────────────────────────────────────────────────────────
+node_modules/
+.pnpm-store/
+.turbo/
+*.vsix
+
+# ── Build outputs ─────────────────────────────────────────────────────────────
+dist/
+out/
+.next/
+apps/vscode/dist/
+
+# ── Pipeline logs (contain generated prompts, not code) ───────────────────────
+.pipeline-logs/
+
+# ── OS / editor ───────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+.vscode/settings.json
+.idea/
+
+# ── Credentials / keys ────────────────────────────────────────────────────────
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+credentials.json
+service-account*.json
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+docker-entrypoint.sh
+
+# ── Terraform state ───────────────────────────────────────────────────────────
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform/
+.terraform.lock.hcl
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+/tmp/sovereign-*.log
+/tmp/sovereign-*.pid
