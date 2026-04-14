@@ -108,6 +108,26 @@ const ROLES = {
 };
 
 /**
+ * Per-role OpenRouter model configuration.
+ * Override any entry via environment variables to tune cost vs. quality.
+ *
+ * Cost tiers (approximate, via OpenRouter):
+ *   google/gemini-flash-1.5        ~$0.000075 / 1K tokens  — pattern analysis, routing
+ *   openai/gpt-4o-mini             ~$0.000150 / 1K tokens  — QA critique, integration
+ *   anthropic/claude-3-haiku       ~$0.000250 / 1K tokens  — coordination, architecture
+ *   anthropic/claude-3-5-sonnet    ~$0.003000 / 1K tokens  — code generation (quality matters)
+ *   openai/text-embedding-3-small  ~$0.000020 / 1K tokens  — vector embeddings
+ */
+const MODEL_CONFIG = {
+  ANALYST:     process.env.MODEL_ANALYST     || 'google/gemini-flash-1.5',
+  ARCHITECT:   process.env.MODEL_ARCHITECT   || 'anthropic/claude-3-haiku',
+  DEVELOPER:   process.env.MODEL_DEVELOPER   || 'anthropic/claude-3-5-sonnet',
+  QA_AUDITOR:  process.env.MODEL_QA_AUDITOR  || 'openai/gpt-4o-mini',
+  CREW_MANAGER:process.env.MODEL_CREW_MANAGER|| 'anthropic/claude-3-haiku',
+  EMBEDDING:   process.env.MODEL_EMBEDDING   || 'openai/text-embedding-3-small',
+};
+
+/**
  * Internal helper to ensure the Python environment is available before execution.
  */
 function getPythonBin() {
@@ -396,7 +416,7 @@ Keep suggestions concise.
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "anthropic/claude-3-sonnet",
+        model: MODEL_CONFIG.QA_AUDITOR,
         messages: [{ role: "user", content: prompt }]
       })
     });
@@ -450,7 +470,7 @@ async function generateEmbedding(text) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "openai/text-embedding-3-small",
+        model: MODEL_CONFIG.EMBEDDING,
         input: text
       })
     });
@@ -501,7 +521,7 @@ Return ONLY the raw JSON object. Do not include markdown code blocks, explanatio
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "anthropic/claude-3-sonnet",
+        model: MODEL_CONFIG.DEVELOPER,
         messages: [{ role: "user", content: prompt }]
       })
     });
