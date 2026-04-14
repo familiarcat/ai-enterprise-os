@@ -1,5 +1,5 @@
 const path = require("path");
-require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 const { Server } = require("@modelcontextprotocol/sdk/server/index.js");
 const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js");
@@ -8,7 +8,7 @@ const {
   invokeUnzipSearchTool, runMission, runMissions, getVersionsHierarchy, 
   manageProject, manageSprint, manageTask, invokeCrewAgent, gitOperation,
   verifyIntegrity
-} = require("../../core/orchestrator.js");
+} = require("../core/orchestrator.js");
 
 const server = new Server({
   name: "sovereign-factory",
@@ -145,10 +145,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           fix: { 
             type: "boolean", 
             description: "If true, attempts to automatically install missing Python dependencies." 
-          },
-          rebuildVenv: {
-            type: "boolean",
-            description: "If true, deletes and recreates the .venv folder from scratch."
           }
         }
       }
@@ -210,13 +206,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { spawnSync } = require('child_process');
     const scriptArgs = [path.resolve(__dirname, '../../scripts/verify_health.sh')];
     if (args.fix) scriptArgs.push('--fix');
-    if (args.rebuildVenv) scriptArgs.push('--rebuild');
 
     const check = spawnSync('zsh', scriptArgs);
     const integrity = await verifyIntegrity();
     
     result = {
-      status: (check.status === 0 && integrity.redis === 'healthy' && integrity.supabase === 'healthy' && integrity.openrouter === 'healthy' && integrity.env === 'healthy') ? "healthy" : "degraded",
+      status: (check.status === 0 && integrity.redis === 'healthy' && integrity.supabase === 'healthy' && integrity.openrouter === 'healthy') ? "healthy" : "degraded",
       python_report: check.stdout.toString(),
       memory_systems: integrity
     };

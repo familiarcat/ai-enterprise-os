@@ -1,6 +1,7 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 /**
  * Lazy-load Memory Systems to allow structural tasks without DB drivers
@@ -23,7 +24,17 @@ function resetMemorySystems() {
 function getMemorySystems() {
   if (!_redis) {
     const Redis = require('ioredis');
-    _redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+    const rawUrl = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
+    const redisUrl = rawUrl.trim();
+    
+    // AWS ElastiCache Serverless requires TLS (rediss://) and the tls option object
+    const useTls = redisUrl.toLowerCase().includes('rediss://') || redisUrl.toLowerCase().includes('cache.amazonaws.com');
+    const connectionString = redisUrl.includes('://') ? redisUrl : `${useTls ? 'rediss' : 'redis'}://${redisUrl}`;
+    const redisOptions = useTls ? { tls: {} } : {};
+
+    _redis = new Redis(connectionString, redisOptions);
+    // Handle connection errors to prevent process crashes from unhandled EventEmitter errors
+    _redis.on('error', (err) => console.error('[Redis] Connection Error:', err.message));
   }
   if (!_supabase) {
     const { createClient } = require('@supabase/supabase-js');
@@ -36,6 +47,56 @@ function getMemorySystems() {
 }
 
 /**
+ * Verifies the integrity of external memory connections (Redis and Supabase).
+ */
+async function verifyIntegrity() {
+  const { redis, supabase } = getMemorySystems();
+  const report = { redis: 'checking', supabase: 'checking', openrouter: 'checking', env: 'checking' };
+
+  // 1. Physical .env and variable validation
+  const envPath = path.resolve(__dirname, '../.env');
+  const envExists = fs.existsSync(envPath);
+  const requiredVars = ['REDIS_URL', 'SUPABASE_URL', 'SUPABASE_KEY', 'OPENROUTER_API_KEY', 'PYTHON_BIN'];
+  const missingVars = requiredVars.filter(v => !process.env[v]);
+
+  if (!envExists) {
+    report.env = 'error: .env file is missing at project root';
+  } else if (missingVars.length > 0) {
+    report.env = `error: missing required variables: ${missingVars.join(', ')}`;
+  } else {
+    report.env = 'healthy';
+  }
+  
+  try {
+    const pong = await redis.ping();
+    report.redis = pong === 'PONG' ? 'healthy' : 'degraded';
+  } catch (err) {
+    report.redis = `error: ${err.message}`;
+  }
+
+  try {
+    // Simple connection test: verify table access
+    const { error } = await supabase.from('missions').select('id').limit(1);
+    report.supabase = error ? `error: ${error.message}` : 'healthy';
+  } catch (err) {
+    report.supabase = `error: ${err.message}`;
+  }
+
+  try {
+    if (!process.env.OPENROUTER_API_KEY) {
+      report.openrouter = 'error: OPENROUTER_API_KEY is missing';
+    } else {
+      const testEmbedding = await generateEmbedding("health-check-ping");
+      report.openrouter = testEmbedding ? 'healthy' : 'error: Embedding request failed (check API key/quota)';
+    }
+  } catch (err) {
+    report.openrouter = `error: ${err.message}`;
+  }
+
+  return report;
+}
+
+/**
  * Agent Role Definitions
  */
 const ROLES = {
@@ -43,8 +104,32 @@ const ROLES = {
   ARCHITECT: "You are a DDD Architect. Your goal is to validate mission objectives against historical constraints.",
   DEVELOPER: "You are a Senior Full-Stack Developer. Your goal is to generate clean, production-ready DDD code blocks.",
   QA_AUDITOR: "You are a Senior QA Auditor. Your goal is to review past mission outcomes and evolutionary history to provide specific technical suggestions for improving the current scaffolding plan.",
-  CREW_MANAGER: "You are a CrewAI Manager. Your goal is to coordinate specialized agents (Analyst, Architect, Developer) into a cohesive process to satisfy the mission objective."
+  CREW_MANAGER: "You are a Sovereign Crew Manager. Your goal is to coordinate specialized agents to build, manage, and evolve the AI Enterprise OS itself, following the Product Factory philosophy."
 };
+
+/**
+ * Internal helper to ensure the Python environment is available before execution.
+ */
+function getPythonBin() {
+  const bin = process.env.PYTHON_BIN || 'python3';
+  
+  // If a specific path is provided but doesn't exist, fail early
+  if (process.env.PYTHON_BIN && !fs.existsSync(process.env.PYTHON_BIN)) {
+    throw new Error(
+      `[Env Error] Configured PYTHON_BIN not found at: ${process.env.PYTHON_BIN}\n` +
+      `Current WorkDir: ${process.cwd()}\n` +
+      `Please run: python3 -m venv .venv && ./.venv/bin/pip install crewai langchain-openai`
+    );
+  }
+  return bin;
+}
+
+/**
+ * Internal helper to ensure the Python environment is available before execution.
+ */
+function verifyPythonEnv() {
+  getPythonBin();
+}
 
 /**
  * Bridge to invoke the Python-based UnzipSearchTool.
@@ -55,10 +140,16 @@ const ROLES = {
  */
 function invokeUnzipSearchTool(options) {
   return new Promise((resolve, reject) => {
+    try {
+      verifyPythonEnv();
+    } catch (err) {
+      return reject(err);
+    }
+
     const scriptPath = path.resolve(__dirname, '../tools/unzip_search_tool.py');
     const jsonArgs = JSON.stringify(options);
-
-    const child = spawn('python3', [scriptPath]);
+    const pythonBin = getPythonBin();
+    const child = spawn(pythonBin, [scriptPath]);
 
     // Hard timeout logic to kill the process if it hangs
     const maxSeconds = options.max_seconds || 30;
@@ -108,9 +199,16 @@ function invokeUnzipSearchTool(options) {
  */
 function invokeCrewAgent(options) {
   return new Promise((resolve, reject) => {
+    try {
+      verifyPythonEnv();
+    } catch (err) {
+      return reject(err);
+    }
+
     const scriptPath = path.resolve(__dirname, '../tools/crew_manager.py');
     const jsonArgs = JSON.stringify(options);
-    const child = spawn('python3', [scriptPath]);
+    const pythonBin = getPythonBin();
+    const child = spawn(pythonBin, [scriptPath]);
 
     const maxSeconds = options.max_seconds || 60;
     const timeoutHandle = setTimeout(() => {
@@ -138,6 +236,35 @@ function invokeCrewAgent(options) {
       clearTimeout(timeoutHandle);
       reject(new Error(`Failed to start CrewAgent: ${err.message}`));
     });
+  });
+}
+
+/**
+ * Executes Git operations to fulfill mission persistence.
+ */
+async function gitOperation(project, action, message) {
+  return new Promise((resolve, reject) => {
+    const commands = {
+      commit: ['add', '.', '&&', 'git', 'commit', '-m', `"${message}"`],
+      push: ['push', 'origin', 'main'],
+      status: ['status']
+    };
+
+    const args = commands[action] || commands.status;
+    const child = spawn('git', args, { shell: true, cwd: path.resolve(__dirname, '..') });
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout.on('data', (data) => stdout += data.toString());
+    child.stderr.on('data', (data) => stderr += data.toString());
+
+    child.on('close', (code) => {
+      if (code === 0) resolve(stdout || "Operation successful");
+      else reject(new Error(stderr || `Git failed with code ${code}`));
+    });
+
+    child.on('error', (err) => reject(new Error(`Failed to start Git: ${err.message}`)));
   });
 }
 
@@ -449,8 +576,9 @@ async function enforceBackboneStructure(targetPath, type = 'domain', name = 'Sov
     master: {
       dirs: ['docs', 'scripts', 'packages/shared', 'packages/ui', 'core', 'tools', 'domains', 'apps/api', 'versions'],
       files: {
-        'README.md': `# Sovereign Factory Master\nAutomated Enterprise OS inspired by OpenRouter Crew Platform.`,
+        'README.md': `# Sovereign Factory Master\nA self-building AI Enterprise OS inspired by OpenRouter Crew Platform.`,
         'pnpm-workspace.yaml': "packages:\n  - 'apps/*'\n  - 'domains/*'\n  - 'packages/*'\n  - 'core'",
+        'requirements.txt': "crewai\nlangchain-openai\nlangchain\n",
         'apps/api/package.json': JSON.stringify({
           name: "@apps/api",
           version: "1.0.0",
@@ -461,11 +589,51 @@ async function enforceBackboneStructure(targetPath, type = 'domain', name = 'Sov
             "@sovereign/shared": "workspace:*",
             "@modelcontextprotocol/sdk": "^0.6.0"
           }
-        }, null, 2)
+        }, null, 2),
+        'packages/ui/package.json': JSON.stringify({
+          name: "@sovereign/ui",
+          version: "1.0.0",
+          private: true,
+          peerDependencies: {
+            "next": "^14.0.0",
+            "react": "^18.2.0"
+          }
+        }, null, 2),
+        'packages/ui/index.ts': "export * from './src/VersionTree';",
+        'packages/ui/src/VersionTree.tsx': `import React from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/router';
+
+export const VersionTree = ({ hierarchy }: { hierarchy: any }) => {
+  const router = useRouter();
+  const { id: currentId } = router.query;
+  const versions = Object.keys(hierarchy || {}).filter(k => !k.startsWith('.'));
+
+  return (
+    <nav className="space-y-2">
+      {versions.map((v) => (
+        <Link
+          key={v}
+          href={\`/project/\${v}\`}
+          className={\`block px-3 py-2 text-sm font-medium rounded-md transition-all \${
+            currentId === v 
+              ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' 
+              : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+          }\`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="truncate">Version {v}</span>
+            {currentId === v && <span className="w-2 h-2 bg-blue-300 rounded-full animate-pulse" />}
+          </div>
+        </Link>
+      ))}
+    </nav>
+  );
+};`
       }
     },
     dashboard: {
-      dirs: ['src/components', 'src/pages', 'src/hooks', 'src/styles', 'public'],
+      dirs: ['src/components', 'src/pages', 'src/pages/project', 'src/hooks', 'src/styles', 'src/layouts', 'public'],
       files: {
         'next.config.js': "module.exports = { reactStrictMode: true };",
         'tailwind.config.js': "module.exports = { content: ['./src/**/*.{js,ts,jsx,tsx}'], theme: { extend: {} }, plugins: [] };",
@@ -473,7 +641,65 @@ async function enforceBackboneStructure(targetPath, type = 'domain', name = 'Sov
           compilerOptions: { target: "es5", lib: ["dom", "dom.iterable", "esnext"], allowJs: true, skipLibCheck: true, strict: true, forceConsistentCasingInFileNames: true, noEmit: true, esModuleInterop: true, module: "esnext", moduleResolution: "node", resolveJsonModule: true, isolatedModules: true, jsx: "preserve", incremental: true },
           include: ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
           exclude: ["node_modules"]
-        }, null, 2)
+        }, null, 2),
+        'package.json': JSON.stringify({
+          name: "@apps/dashboard",
+          version: "1.0.0",
+          private: true,
+          scripts: {
+            "dev": "next dev"
+          },
+          dependencies: { "next": "^14.0.0", "react": "^18.2.0", "react-dom": "^18.2.0", "@sovereign/ui": "workspace:*" }
+        }, null, 2),
+        'src/layouts/AdminLayout.tsx': "import React from 'react';\nimport { VersionTree } from '@sovereign/ui';\n\ninterface AdminLayoutProps {\n  children: React.ReactNode;\n  hierarchy: any;\n}\n\nexport const AdminLayout: React.FC<AdminLayoutProps> = ({ children, hierarchy }) => {\n  return (\n    <div className='flex h-screen bg-slate-900 text-white'>\n      <aside className='w-64 border-r border-slate-800 p-4 overflow-y-auto'>\n        <h2 className='text-xl font-bold mb-4 text-blue-400'>Sovereign OS</h2>\n        <VersionTree hierarchy={hierarchy} />\n      </aside>\n      <main className='flex-1 overflow-auto p-8 bg-slate-50 text-slate-900'>\n        {children}\n      </main>\n    </div>\n  );\n};",
+        'src/pages/index.tsx': `import React from 'react';
+import { AdminLayout } from '../layouts/AdminLayout';
+
+export default function Home({ hierarchy }) {
+  return (
+    <AdminLayout hierarchy={hierarchy}>
+      <h1 className="text-2xl font-bold">Sovereign Factory Dashboard</h1>
+      <p className="mt-2 text-slate-600">Welcome to your AI Enterprise OS. Data managed via Server Side state.</p>
+    </AdminLayout>
+  );
+}
+
+export async function getServerSideProps() {
+  try {
+    const res = await fetch('http://localhost:3001/hierarchy');
+    const hierarchy = await res.json();
+    return { props: { hierarchy } };
+  } catch (err) {
+    console.error('Initial hierarchy fetch failed:', err);
+    return { props: { hierarchy: {} } };
+  }
+}`,
+        'src/pages/project/[id].tsx': `import React from 'react';
+import { AdminLayout } from '../../layouts/AdminLayout';
+
+export default function ProjectDashboard({ id, hierarchy }) {
+  return (
+    <AdminLayout hierarchy={hierarchy}>
+      <h1 className="text-2xl font-bold">Project Dashboard: {id}</h1>
+      <div className="mt-4 p-6 bg-white rounded shadow">
+        <h2 className="text-lg font-semibold border-b pb-2">Evolutionary Status</h2>
+        <p className="mt-2 text-slate-600">Viewing details for project version identified by: {id}</p>
+      </div>
+    </AdminLayout>
+  );
+}
+
+export async function getServerSideProps(context) {
+  const { id } = context.params;
+  try {
+    const res = await fetch('http://localhost:3001/hierarchy');
+    const hierarchy = await res.json();
+    return { props: { id, hierarchy } };
+  } catch (err) {
+    console.error('Project fetch failed:', err);
+    return { props: { id, hierarchy: {} } };
+  }
+}`
       }
     },
     domain: {
@@ -784,5 +1010,6 @@ module.exports = {
   analyzeEvolution, scaffoldDDDComponent, storeMissionResult, 
   getVersionsHierarchy, recallMemory, auditPastMissions, 
   enforceBackboneStructure, getMemorySystems, resetMemorySystems,
-  manageProject, manageSprint, manageTask
+  manageProject, manageSprint, manageTask,
+  gitOperation, verifyIntegrity
 }

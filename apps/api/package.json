@@ -5,6 +5,7 @@
   "dependencies": {
     "express": "^4.18.2",
     "dotenv": "^16.4.5",
+    "cors": "^2.8.5",
     "@sovereign/shared": "workspace:*",
     "@modelcontextprotocol/sdk": "^0.6.0"
   }

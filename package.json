@@ -4,6 +4,8 @@
   "packageManager": "pnpm@8.15.4",
   "scripts": {
     "dev": "node apps/api/server.js",
+    "dev:ui": "pnpm --filter @apps/dashboard dev",
+    "dev:all": "turbo run dev",
     "test": "vitest run",
     "test:watch": "vitest",
     "mcp": "node apps/api/mcp-server.js",

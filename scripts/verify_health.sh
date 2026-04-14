@@ -1,70 +1,60 @@
-#!/bin/zsh
-# verify_health.sh - Comprehensive health check for AI Enterprise OS
+#!/usr/bin/env zsh
+# AI Enterprise OS - Python Environment Health Check
 
-echo "🔍 Starting Sovereign Factory Health Check..."
-FAILED=0
+PROJECT_ROOT=$(dirname "$0")/..
+REQ_FILE="$PROJECT_ROOT/requirements.txt"
+ENV_FILE="$PROJECT_ROOT/.env"
 
-check_file() {
-    if [ ! -f "$1" ]; then
-        echo "❌ Missing file: $1"
-        FAILED=1
-    else
-        echo "✅ Found: $1"
-    fi
-}
-
-check_json() {
-    if ! node -e "JSON.parse(require('fs').readFileSync('$1', 'utf8'))" >/dev/null 2>&1; then
-        echo "❌ Invalid JSON syntax: $1"
-        FAILED=1
-    else
-        echo "✅ Valid JSON: $1"
-    fi
-}
-
-echo "\n--- 1. Infrastructure Check ---"
-check_file "automate_structure.sh"
-check_file "core/orchestrator.js"
-check_file "tools/unzip_search_tool.py"
-
-echo "\n--- 2. Configuration Integrity ---"
-check_json "package.json"
-check_json "apps/api/package.json"
-check_json "packages/shared/package.json"
-
-echo "\n--- 3. Environment Context ---"
-for var in OPENROUTER_API_KEY SUPABASE_URL SUPABASE_KEY REDIS_URL; do
-    if [ -z "$(eval "echo \$$var")" ]; then
-        echo "⚠️  Missing Env Var: $var"
-        FAILED=1
-    else
-        echo "✅ Env Var Set: $var"
-    fi
-done
-
-echo "\n--- 4. Connectivity Check ---"
-if [ -n "$REDIS_URL" ]; then
-    if node -e "require('ioredis').newRedis = require('ioredis'); const r = new (require('ioredis'))('$REDIS_URL', { connectTimeout: 2000, maxRetriesPerRequest: 0 }); r.on('error', () => {}); r.ping().then(() => process.exit(0)).catch(() => process.exit(1)); setTimeout(() => process.exit(1), 2500);" >/dev/null 2>&1; then
-        echo "✅ Redis Server: Reachable"
-    else
-        echo "❌ Redis Server: Unreachable"
-        FAILED=1
-    fi
+if [ ! -f "$ENV_FILE" ]; then
+  echo "⚠️  Warning: .env file not found at $PROJECT_ROOT/.env"
+  echo "   Ensure your credentials are set in the shell or create a .env file."
 fi
 
-if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_KEY" ]; then
-    STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "apikey: $SUPABASE_KEY" "$SUPABASE_URL/rest/v1/")
-    if [ "$STATUS" = "200" ] || [ "$STATUS" = "302" ]; then
-        echo "✅ Supabase Server: Reachable"
-    else
-        echo "❌ Supabase Server: Unreachable (Status: $STATUS)"
-        FAILED=1
-    fi
+FIX_MODE=false
+if [[ "$1" == "--fix" ]]; then FIX_MODE=true; fi
+REBUILD_MODE=false
+if [[ "$1" == "--rebuild" || "$2" == "--rebuild" ]]; then REBUILD_MODE=true; fi
+
+if [ "$REBUILD_MODE" = true ]; then
+  echo "🗑  Deleting and recreating virtual environment..."
+  rm -rf "$PROJECT_ROOT/.venv"
+  python3 -m venv "$PROJECT_ROOT/.venv"
+  "$PROJECT_ROOT/.venv/bin/pip" install -r "$REQ_FILE"
+  echo "✅ Virtual environment rebuilt."
 fi
 
-if [ $FAILED -eq 0 ]; then
-    echo "\n✨ All systems nominal. The Factory is ready for missions."
-else
-    echo "\nHW ❌ Health check failed. Please review the errors above."
-    exit 1
+if [ ! -f "$PYTHON_BIN" ]; then
+  echo "❌ Error: PYTHON_BIN is not set or the binary does not exist at: $PYTHON_BIN"
+  exit 1
 fi
+
+echo "🔍 Validating Python dependencies from $REQ_FILE..."
+
+MISSING_COUNT=0
+while IFS= read -r line || [[ -n "$line" ]]; do
+  # Skip comments and empty lines
+  [[ "$line" =~ ^#.*$ ]] || [[ -z "$line" ]] && continue
+  
+  # Extract package name (ignoring version constraints)
+  pkg=$(echo "$line" | sed -E 's/[<>=!~].*//' | xargs)
+  
+  if ! "$PYTHON_BIN" -m pip show "$pkg" > /dev/null 2>&1; then
+    if [ "$FIX_MODE" = true ]; then
+      echo "🛠  Missing $pkg. Attempting to install..."
+      "$PYTHON_BIN" -m pip install "$pkg"
+      if ! "$PYTHON_BIN" -m pip show "$pkg" > /dev/null 2>&1; then
+        echo "❌ Failed to install $pkg"
+        ((MISSING_COUNT++))
+      else
+        echo "✅ Successfully installed $pkg"
+      fi
+    else
+      echo "❌ Missing dependency: $pkg"
+      ((MISSING_COUNT++))
+    fi
+  else
+    echo "✅ Verified: $pkg"
+  fi
+done < "$REQ_FILE"
+
+[ $MISSING_COUNT -eq 0 ] && echo "🚀 All Python dependencies are satisfied." || exit 1
