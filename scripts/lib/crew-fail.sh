@@ -3,23 +3,6 @@
 # scripts/lib/crew-fail.sh — Sovereign Factory Crew Failure Dispatcher
 #
 # Generates structured Claude Code prompts when pipeline steps fail.
-# Each failure is routed to the crew member whose domain covers the problem,
-# paired with the MCP tool they should invoke to resolve it.
-#
-# Compatible with bash 3.2+ (macOS default) and bash 4+.
-#
-# Usage (source this file, then call crew_fail):
-#   source "$(dirname "${BASH_SOURCE[0]}")/lib/crew-fail.sh"
-#   crew_fail \
-#     --step    "p0-s3-supabase-check"          \
-#     --persona "dr_crusher"                    \
-#     --tool    "health_check"                  \
-#     --tool-args '{"fix": true}'               \
-#     --context "SUPABASE_URL is set but /rest/v1/ returned 401" \
-#     --error   "$ERR_OUTPUT"
-#
-# If the CLAUDE_CLI env var is set to a path (or 'claude' is on PATH),
-# pass --auto to pipe the generated prompt directly into Claude.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # ── ANSI colours ──────────────────────────────────────────────────────────────
@@ -32,9 +15,7 @@ _MAG='\033[0;35m'
 _BLD='\033[1m'
 _RST='\033[0m'
 
-# ── Crew profile lookup (bash 3.2-compatible — no declare -A) ─────────────────
-# Each function takes a persona key and returns the field value.
-
+# ── Crew profile lookup ───────────────────────────────────────────────────────
 _crew_display() {
   case "$1" in
     captain_picard)  echo "Jean-Luc Picard" ;;
@@ -125,17 +106,6 @@ _tool_desc() {
   esac
 }
 
-# ── crew_fail ─────────────────────────────────────────────────────────────────
-# Primary public function. Call after any step failure.
-#
-# Arguments (named flags):
-#   --step       Short step ID, e.g. "p0-s3-supabase-check"
-#   --persona    Crew member key, e.g. "dr_crusher"
-#   --tool       MCP tool name, e.g. "health_check"
-#   --tool-args  JSON args for the MCP tool (optional, defaults to {})
-#   --context    Human-readable description of what was being attempted
-#   --error      Raw error output captured from the failed command
-#   --auto       If present, attempt to pipe prompt to `claude` CLI
 crew_fail() {
   local step="" persona="" tool="" tool_args="{}" context="" error_output="" auto=false
 
@@ -152,7 +122,6 @@ crew_fail() {
     esac
   done
 
-  # Resolve crew profile via lookup functions (bash 3.2-compatible)
   local display; display="$(_crew_display "$persona")"
   local rank;    rank="$(_crew_rank "$persona")"
   local domain;  domain="$(_crew_domain "$persona")"
@@ -160,7 +129,6 @@ crew_fail() {
   local model;   model="$(_crew_model "$persona")"
   local tool_description; tool_description="$(_tool_desc "$tool")"
 
-  # Build the Claude Code prompt (plain text, paste-ready)
   local claude_prompt
   claude_prompt="$(cat <<PROMPT
 The pipeline step \`${step}\` in the Sovereign Factory deployment pipeline has failed.
@@ -199,16 +167,6 @@ Persona context for tone: ${display} would say — "${quote}"
 PROMPT
 )"
 
-  # Automatic Agent Instruction Block (Hidden in standard view)
-  local agent_instruction
-  agent_instruction="$(cat <<AGENT
-@agent-action: invoke_mcp_tool
-tool: ${tool}
-args: ${tool_args}
-AGENT
-)"
-
-  # ── Print the formatted failure block to stderr ──────────────────────────────
   echo "" >&2
   echo -e "${_RED}${_BLD}╔══════════════════════════════════════════════════════════════╗${_RST}" >&2
   echo -e "${_RED}${_BLD}║        SOVEREIGN FACTORY — CREW DISPATCH REQUIRED            ║${_RST}" >&2
@@ -231,9 +189,6 @@ AGENT
     echo "" >&2
   fi
 
-  # Output the hidden instruction for autonomous agents
-  echo "$agent_instruction" >&2
-
   echo -e "${_BLU}${_BLD}  ── CLAUDE CODE PROMPT ──────────────────────────────────────────${_RST}" >&2
   echo -e "${_BLU}  Copy the block below and paste into Claude Code chat:${_RST}" >&2
   echo "" >&2
@@ -241,11 +196,7 @@ AGENT
   echo "$claude_prompt" | sed 's/^/│ /' >&2
   echo -e "${_BLD}└──────────────────────────────────────────────────────────────┘${_RST}" >&2
   echo "" >&2
-  echo -e "${_YEL}  Quick MCP invocation (in Claude Code):${_RST}" >&2
-  echo -e "  ${_GRN}Use the ${tool} MCP tool with args: ${tool_args}${_RST}" >&2
-  echo "" >&2
 
-  # ── Write prompt to file so it can be retrieved later ───────────────────────
   local log_dir
   log_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/.pipeline-logs"
   mkdir -p "$log_dir"
@@ -255,54 +206,10 @@ AGENT
   echo -e "  ${_BLD}Prompt saved :${_RST} ${prompt_file}" >&2
   echo "" >&2
 
-  # ── Auto-pipe to claude CLI if requested and available ───────────────────────
-  if [[ "$auto" == true ]]; then
-    local claude_bin="${CLAUDE_CLI:-claude}"
-    if command -v "$claude_bin" &>/dev/null; then
-      echo -e "${_GRN}${_BLD}  AUTO: Piping to claude CLI...${_RST}" >&2
-      echo "$claude_prompt" | "$claude_bin" --print 2>&1 | sed 's/^/  [claude] /' >&2
-    else
-      echo -e "${_YEL}  --auto requested but 'claude' CLI not found. Prompt saved to file above.${_RST}" >&2
-    fi
-  fi
-
   echo -e "${_RED}${_BLD}════════════════════════════════════════════════════════════════${_RST}" >&2
   echo "" >&2
 }
 
-# ── run_step ──────────────────────────────────────────────────────────────────
-# Wraps a command, captures stderr, and calls crew_fail on non-zero exit.
-# Usage:
-#   run_step "step-id" "persona" "mcp_tool" '{"tool":"args"}' "context description" cmd [args...]
-run_step() {
-  local step_id="$1"
-  local persona="$2"
-  local mcp_tool="$3"
-  local tool_args="$4"
-  local context="$5"
-  shift 5
-
-  local err_file; err_file="$(mktemp)"
-  echo -e "${_GRN}  ▶ ${step_id}${_RST}  ${context}" >&2
-
-  if ! "$@" 2>"$err_file"; then
-    local err_content; err_content="$(cat "$err_file")"
-    rm -f "$err_file"
-    crew_fail \
-      --step     "$step_id"   \
-      --persona  "$persona"   \
-      --tool     "$mcp_tool"  \
-      --tool-args "$tool_args" \
-      --context  "$context"   \
-      --error    "$err_content"
-    return 1
-  fi
-
-  rm -f "$err_file"
-  echo -e "  ${_GRN}✔${_RST}  ${step_id} passed" >&2
-}
-
-# ── step_header ───────────────────────────────────────────────────────────────
 step_header() {
   local phase="$1" title="$2"
   echo ""
@@ -312,7 +219,6 @@ step_header() {
   echo ""
 }
 
-# ── phase_pass ────────────────────────────────────────────────────────────────
 phase_pass() {
   local phase="$1"
   echo ""

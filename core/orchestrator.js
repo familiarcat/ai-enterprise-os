@@ -416,6 +416,15 @@ async function runMission(project, objective){
     score: observation.score
   });
 
+  // 5. Billing Phase: Account for token consumption (Sovereign Economics)
+  try {
+    const { incrementTokenUsage } = require('./repository');
+    const tokenEstimate = Math.ceil(JSON.stringify(result).length / 4) + 1000; // Base mission cost + weight
+    await incrementTokenUsage(project, tokenEstimate);
+  } catch (billingError) {
+    console.warn(`[Billing] Failed to log usage for ${project}:`, billingError.message);
+  }
+
   return result;
 }
 
@@ -881,27 +890,37 @@ export const VersionTree = ({ hierarchy }: { hierarchy: any }) => {
           },
           dependencies: { "next": "^14.0.0", "react": "^18.2.0", "react-dom": "^18.2.0", "@sovereign/ui": "workspace:*" }
         }, null, 2),
-        'src/layouts/AdminLayout.tsx': "import React from 'react';\nimport { VersionTree } from '@sovereign/ui';\n\ninterface AdminLayoutProps {\n  children: React.ReactNode;\n  hierarchy: any;\n}\n\nexport const AdminLayout: React.FC<AdminLayoutProps> = ({ children, hierarchy }) => {\n  return (\n    <div className='flex h-screen bg-slate-900 text-white'>\n      <aside className='w-64 border-r border-slate-800 p-4 overflow-y-auto'>\n        <h2 className='text-xl font-bold mb-4 text-blue-400'>Sovereign OS</h2>\n        <VersionTree hierarchy={hierarchy} />\n      </aside>\n      <main className='flex-1 overflow-auto p-8 bg-slate-50 text-slate-900'>\n        {children}\n      </main>\n    </div>\n  );\n};",
+        'src/layouts/AdminLayout.tsx': "import React from 'react';\nimport { VersionTree } from '@sovereign/ui';\n\ninterface AdminLayoutProps {\n  children: React.ReactNode;\n  hierarchy: any;\n}\n\nexport const AdminLayout: React.FC<AdminLayoutProps> = ({ children, hierarchy }) => {\n  return (\n    <div className='flex h-screen bg-white text-black font-sans'>\n      <aside className='w-80 border-r-2 border-black p-8 overflow-y-auto'>\n        <h2 className='text-3xl font-black uppercase tracking-tighter mb-12'>Sovereign<br/>OS</h2>\n        <VersionTree hierarchy={hierarchy} />\n      </aside>\n      <main className='flex-1 overflow-auto p-0 bg-white'>\n        {children}\n      </main>\n    </div>\n  );\n};",
         'src/pages/index.tsx': `import React from 'react';
 import { AdminLayout } from '../layouts/AdminLayout';
+import { Billing } from '../components/Billing';
 
-export default function Home({ hierarchy }) {
+export default function Home({ hierarchy, usage }) {
   return (
     <AdminLayout hierarchy={hierarchy}>
-      <h1 className="text-2xl font-bold">Sovereign Factory Dashboard</h1>
-      <p className="mt-2 text-slate-600">Welcome to your AI Enterprise OS. Data managed via Server Side state.</p>
+      <div className="space-y-12 bg-white text-black min-h-full">
+        <Billing usage={usage} />
+        <div className="p-8 border-t-2 border-black">
+          <h1 className="text-4xl font-black uppercase tracking-tighter">Enterprise / Status</h1>
+          <p className="mt-4 text-lg font-light leading-relaxed max-w-2xl">Welcome to your AI Enterprise OS. All business units are currently synchronized with the Master Mission Directive and monitoring resource consumption via the billing domain.</p>
+        </div>
+      </div>
     </AdminLayout>
   );
 }
 
 export async function getServerSideProps() {
   try {
-    const res = await fetch('http://localhost:3001/hierarchy');
-    const hierarchy = await res.json();
-    return { props: { hierarchy } };
+    const [hRes, bRes] = await Promise.all([
+      fetch('http://localhost:3001/api/hierarchy'),
+      fetch('http://localhost:3001/billing/usage?projectId=sovereign-factory')
+    ]);
+    const hierarchy = await hRes.json();
+    const usage = bRes.ok ? await bRes.json() : null;
+    return { props: { hierarchy, usage } };
   } catch (err) {
-    console.error('Initial hierarchy fetch failed:', err);
-    return { props: { hierarchy: {} } };
+    console.error('Initial dashboard data fetch failed:', err);
+    return { props: { hierarchy: {}, usage: null } };
   }
 }`,
         'src/pages/project/[id].tsx': `import React from 'react';

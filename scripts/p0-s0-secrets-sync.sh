@@ -3,14 +3,7 @@
 # p0-s0-secrets-sync.sh — Phase 0, Step 0: Sync local credentials → GitHub Secrets
 #
 # Sources credentials from .env (preferred) with .zshrc as fallback,
-# syncs them to GitHub Actions secrets, then dispatches Worf's security
-# observation to the Observation Lounge.
-#
-# This is Step 0 — it runs before env-check (s1) because it ensures the
-# CI/CD environment mirrors local state before any pipeline validation.
-#
-# Assigned crew: Lt. Worf (security gate) + Chief O'Brien (sync plumbing)
-# MCP tool on failure: health_check
+# syncs them to GitHub Actions secrets.
 # ═══════════════════════════════════════════════════════════════════════════════
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,7 +16,7 @@ step_header "PHASE 0 — CONVERGENCE" "Step 0: Sync Local Credentials → GitHub
 ENV_FILE="$ROOT/.env"
 ZSHRC="$HOME/.zshrc"
 
-# Keys to sync — expanded from the original sync_secrets.sh
+# Keys to sync
 SYNC_KEYS=(
   "OPENROUTER_API_KEY"
   "SUPABASE_URL"
@@ -34,7 +27,7 @@ SYNC_KEYS=(
   "CREW_OBS_KEY"
 )
 
-# Optional model-tier overrides (sync if set locally)
+# Optional model-tier overrides
 OPTIONAL_KEYS=(
   "MODEL_CREW_MANAGER"
   "MODEL_ARCHITECT"
@@ -62,10 +55,8 @@ fi
 echo "  Loading credentials..."
 set -a; source "$ENV_FILE" 2>/dev/null || true; set +a
 
-# Fallback: read uncommented exports from .zshrc for any still-empty vars
 _zshrc_val() {
   local key="$1"
-  # Match: export KEY="value" or export KEY=value (no quotes)
   grep -E "^export ${key}=" "$ZSHRC" 2>/dev/null \
     | sed -E "s/^export ${key}=[\"']?([^\"']+)[\"']?/\1/" \
     | tail -1 || echo ""
@@ -113,73 +104,31 @@ echo "  ✔  GitHub CLI authenticated — repo: $REPO_INFO"
 # ── 4. Sync required secrets ──────────────────────────────────────────────────
 echo ""
 echo "  Syncing required secrets to GitHub Actions..."
-SYNCED=()
-MISSING=()
 FAILED=()
-
 for key in "${SYNC_KEYS[@]}"; do
   val="${!key:-}"
-  if [[ -z "$val" ]]; then
-    MISSING+=("$key")
-    echo "  ⚠  $key — not set locally, skipping"
-    continue
-  fi
-  if echo "$val" | gh secret set "$key" 2>/tmp/p0s0-secret-err.txt; then
-    SYNCED+=("$key")
-    echo "  ✔  $key — synced"
-  else
-    FAILED+=("$key: $(cat /tmp/p0s0-secret-err.txt | head -1)")
-    echo "  ✗  $key — sync failed"
+  if [[ -z "$val" ]]; then continue; fi
+  if ! echo "$val" | gh secret set "$key" 2>/dev/null; then
+    FAILED+=("$key")
   fi
 done
 
-# ── 5. Sync optional secrets (silent skip if empty) ───────────────────────────
-echo ""
-echo "  Syncing optional model-routing secrets..."
-for key in "${OPTIONAL_KEYS[@]}"; do
-  val="${!key:-}"
-  if [[ -n "$val" ]]; then
-    echo "$val" | gh secret set "$key" 2>/dev/null && echo "  ✔  $key" || echo "  ⚠  $key — failed (non-fatal)"
-  fi
-done
-
-# ── 6. Error if required secrets failed ──────────────────────────────────────
 if [[ ${#FAILED[@]} -gt 0 ]]; then
   crew_fail \
     --step    "$STEP" \
     --persona "chief_obrien" \
     --tool    "run_crew_agent" \
-    --tool-args '{"objective": "Diagnose GitHub secret sync failures — check IAM permissions and gh CLI auth scope", "agents": [{"persona": "Chief O'\''Brien"}, {"persona": "Lt. Worf"}]}' \
-    --context "Some GitHub secrets failed to sync. This will cause CI/CD failures." \
+    --tool-args '{"objective": "Diagnose GitHub secret sync failures", "agents": [{"persona": "Chief O'\''Brien"}]}' \
+    --context "Some GitHub secrets failed to sync." \
     --error   "$(printf '%s\n' "${FAILED[@]}")"
   exit 1
 fi
 
-# ── 7. Summary ────────────────────────────────────────────────────────────────
-echo ""
-echo "  Sync results:"
-echo "    Synced : ${#SYNCED[@]} secrets (${SYNCED[*]:-none})"
-echo "    Missing: ${#MISSING[@]} secrets (${MISSING[*]:-none})"
-echo "    Failed : ${#FAILED[@]} secrets"
-
-# ── 8. Dispatch Worf's security observation to Observation Lounge ─────────────
-echo ""
-echo "  Dispatching Worf's security report to Observation Lounge..."
-bash "$SCRIPT_DIR/lounge/worf-security-report.sh" "" "secrets-sync" 2>/dev/null || true
-
-# ── 9. Update .env with any .zshrc values that were missing ───────────────────
-# Only update keys that were empty in .env but found in .zshrc
-echo ""
-echo "  Reconciling .env with synced values..."
+# ── 9. Reconcile .env ─────────────────────────────────────────────────────────
 for key in "${SYNC_KEYS[@]}"; do
   val="${!key:-}"
   if [[ -n "$val" ]] && ! grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
     echo "${key}=${val}" >> "$ENV_FILE"
-    echo "  ✔  Wrote $key to .env (was missing)"
-  elif grep -q "^${key}=$" "$ENV_FILE" 2>/dev/null && [[ -n "$val" ]]; then
-    # Key exists but value is empty — update it
-    sed -i.bak "s|^${key}=.*|${key}=${val}|" "$ENV_FILE" && rm -f "${ENV_FILE}.bak"
-    echo "  ✔  Updated empty $key in .env"
   fi
 done
 

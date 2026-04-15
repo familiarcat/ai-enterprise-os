@@ -14,6 +14,7 @@ import CrewSelector from '@/components/CrewSelector';
 import TaskLLMPanel, { type ExecutionConfig } from '@/components/TaskLLMPanel';
 import ObservationLounge, { type AgentExecution } from '@/components/ObservationLounge';
 import CodeExecutionPanel from '@/components/CodeExecutionPanel';
+import { Billing } from '@/components/Billing';
 import { CREW, MISSION_FLOW, MODEL_ID_MAP } from '@/lib/crew-manifest';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -181,15 +182,15 @@ export default function MissionControl() {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-alex-gradient">
+    <div className="min-h-screen bg-white text-black font-sans selection:bg-red-500 selection:text-white">
       {/* Top navigation */}
-      <header className="sticky top-0 z-50 border-b border-white/5 bg-space-darker/80 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+      <header className="sticky top-0 z-50 border-b-2 border-black bg-white">
+        <div className="max-w-[1600px] mx-auto px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-2xl">🚀</span>
+            <span className="text-3xl font-black">SF</span>
             <div>
-              <h1 className="text-sm font-bold text-white tracking-tight">AI Enterprise OS</h1>
-              <p className="text-[10px] text-gray-600 font-mono">Mission Control</p>
+              <h1 className="text-base font-black uppercase tracking-tighter leading-none">AI Enterprise OS</h1>
+              <p className="text-[10px] text-black font-bold uppercase tracking-widest mt-1">Mission Control</p>
             </div>
           </div>
 
@@ -197,15 +198,15 @@ export default function MissionControl() {
             {/* Bridge status */}
             <div className="flex items-center gap-1.5 text-xs font-mono">
               <span className={[
-                'w-1.5 h-1.5 rounded-full',
-                bridgeStatus === 'online'  ? 'bg-crew-green animate-pulse' :
+                'w-2 h-2 rounded-none',
+                bridgeStatus === 'online'  ? 'bg-red-600' :
                 bridgeStatus === 'offline' ? 'bg-red-500' :
                 'bg-gray-600 animate-pulse',
               ].join(' ')} />
               <span className={
-                bridgeStatus === 'online'  ? 'text-crew-green' :
+                bridgeStatus === 'online'  ? 'text-black font-bold' :
                 bridgeStatus === 'offline' ? 'text-red-400' :
-                'text-gray-600'
+                'text-gray-400'
               }>
                 MCP Bridge {bridgeStatus === 'online' ? ':3002' : bridgeStatus}
               </span>
@@ -224,67 +225,60 @@ export default function MissionControl() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <main className="max-w-[1600px] mx-auto px-8 py-12">
         {/* Step indicator */}
-        <div className="flex items-center gap-1 mb-8 overflow-x-auto pb-2">
+<Billing />
+        <div className="grid grid-cols-4 gap-0 mb-12 border-2 border-black">
           {STEPS.map((s, idx) => {
             const isDone    = step > s.id;
             const isActive  = step === s.id;
             const canClick  = isDone || isActive;
             return (
-              <React.Fragment key={s.id}>
-                <button
-                  onClick={() => canClick && setStep(s.id)}
-                  disabled={!canClick}
-                  className={[
-                    'flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-semibold whitespace-nowrap transition-all',
-                    isActive
-                      ? 'border-crew-green/50 bg-crew-green/10 text-crew-green shadow-[0_0_12px_rgba(0,255,170,0.1)]'
-                      : isDone
-                        ? 'border-crew-green/20 bg-crew-green/5 text-crew-green/60 hover:bg-crew-green/10 cursor-pointer'
-                        : 'border-white/5 bg-black/10 text-gray-600 cursor-default',
-                  ].join(' ')}
-                >
-                  <span className={isActive ? '' : 'opacity-60'}>{s.icon}</span>
-                  <span>
-                    <span className="text-[10px] font-mono mr-1.5 opacity-50">0{s.id}</span>
-                    {s.label}
-                  </span>
-                  {isDone && <span className="text-[10px] text-crew-green/60 font-mono">✓</span>}
-                </button>
-                {idx < STEPS.length - 1 && (
-                  <div className={[
-                    'w-8 h-px flex-shrink-0',
-                    step > s.id ? 'bg-crew-green/30' : 'bg-white/5',
-                  ].join(' ')} />
-                )}
-              </React.Fragment>
+              <button
+                key={s.id}
+                onClick={() => canClick && setStep(s.id)}
+                disabled={!canClick}
+                className={[
+                  'flex flex-col p-6 text-left border-r-2 last:border-r-0 border-black transition-all',
+                  isActive
+                    ? 'bg-black text-white'
+                    : isDone
+                      ? 'bg-white text-black/40 hover:text-black cursor-pointer'
+                      : 'bg-white text-black/20 cursor-default',
+                ].join(' ')}
+              >
+                <span className="text-xs font-bold uppercase tracking-widest mb-4">0{s.id}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">{s.icon}</span>
+                  <span className="text-lg font-black uppercase tracking-tighter leading-none">{s.label}</span>
+                </div>
+              </button>
             );
           })}
         </div>
 
         {/* Step content card */}
-        <div className="border border-white/8 rounded-2xl bg-space-card backdrop-blur-sm overflow-hidden">
-          <div className="border-b border-white/5 px-6 py-4 flex items-center justify-between">
+        <div className="border-2 border-black bg-white rounded-none overflow-hidden">
+          <div className="border-b-2 border-black px-8 py-6 flex items-center justify-between">
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-xl">{STEPS[step - 1].icon}</span>
-                <h2 className="font-bold text-white">{STEPS[step - 1].label}</h2>
+                <h2 className="text-4xl font-black uppercase tracking-tighter">{STEPS[step - 1].label}</h2>
               </div>
-              <p className="text-xs text-gray-500 mt-0.5 ml-8">{STEPS[step - 1].description}</p>
+              <p className="text-xs font-bold uppercase tracking-widest mt-1 ml-8">{STEPS[step - 1].description}</p>
             </div>
 
             {step > 1 && (
               <button
                 onClick={resetMission}
-                className="text-xs text-gray-500 hover:text-gray-300 border border-white/10 px-3 py-1.5 rounded-lg transition-colors"
+                className="text-xs font-black uppercase border-2 border-black px-4 py-2 hover:bg-black hover:text-white transition-colors"
               >
                 ↺ Reset
               </button>
             )}
           </div>
 
-          <div className="p-6">
+          <div className="p-8">
             {/* Step 1: MCP Brain — Crew selection */}
             {step === 1 && (
               <div>
@@ -297,10 +291,10 @@ export default function MissionControl() {
                     onClick={() => setStep(2)}
                     disabled={selectedCrew.length === 0}
                     className={[
-                      'px-6 py-3 rounded-xl font-bold text-sm tracking-widest uppercase transition-all',
+                      'px-10 py-4 rounded-none font-black text-sm tracking-widest uppercase transition-all',
                       selectedCrew.length > 0
-                        ? 'bg-crew-green/20 border border-crew-green/50 text-crew-green hover:bg-crew-green/30'
-                        : 'bg-white/5 border border-white/10 text-gray-600 cursor-not-allowed',
+                        ? 'bg-red-600 text-white hover:bg-black'
+                        : 'bg-gray-100 text-gray-400 cursor-not-allowed',
                     ].join(' ')}
                   >
                     Configure Task →
@@ -339,11 +333,12 @@ export default function MissionControl() {
         </div>
 
         {/* Footer */}
-        <div className="mt-6 text-center text-xs text-gray-700 font-mono">
+        <div className="mt-12 text-center text-[10px] text-black font-black uppercase tracking-[0.2em]">
           AI Enterprise OS · MCP Bridge :{process.env.NEXT_PUBLIC_MCP_BRIDGE_URL?.split(':').pop() ?? '3002'}
-          {' · '}Star Trek crew via OpenRouter
+          {' / '}Star Trek crew via OpenRouter
         </div>
       </main>
+      
     </div>
   );
 }
