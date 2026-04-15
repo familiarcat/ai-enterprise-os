@@ -27,6 +27,16 @@ pnpm add -Dw vitest
 # 3. Ensure Lazy Loading logic is present in orchestrator
 # This step checks if getMemorySystems exists, if not, it warns the user
 # to apply the diff provided by Gemini.
+
+# 3. Check for Supabase Placeholders
+ZSHRC="/Users/bradygeorgen/.zshrc"
+if grep -q "REPLACE_WITH_ACTUAL" "$ZSHRC" 2>/dev/null; then
+    echo "⚠️  Supabase placeholders detected in ~/.zshrc"
+    echo "   Running automated configuration..."
+    bash "$PROJECT_ROOT/scripts/p0-s0-supabase-config.sh"
+fi
+
+# 4. Ensure Lazy Loading logic is present in orchestrator
 if ! grep -q "getMemorySystems" "$ORCHESTRATOR"; then
     echo "⚠️  Lazy loading logic missing in $ORCHESTRATOR."
     echo "Please ensure the diff for core/orchestrator.js has been applied."

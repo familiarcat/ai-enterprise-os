@@ -12,14 +12,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/crew-fail.sh"
 
-FROM_STEP="${2:-s1}"
+FROM_STEP="${2:-s0}"
 
 step_header "PHASE 0" "Convergence & Validation — All Steps"
-echo "  Steps: p0-s1 env-check → s2 redis-ping → s3 supabase-check"
+echo "  Steps: p0-s0 secrets-sync → s1 env-check → s2 redis-ping → s3 supabase-check"
 echo "         → s4 bridge-start → s5 dashboard-wire → s6 smoke-test"
 echo ""
 
 STEPS=(
+  "s0:p0-s0-secrets-sync.sh"
   "s1:p0-s1-env-check.sh"
   "s2:p0-s2-redis-ping.sh"
   "s3:p0-s3-supabase-check.sh"
@@ -29,7 +30,7 @@ STEPS=(
 )
 
 SKIP=true
-[[ "$FROM_STEP" == "s1" ]] && SKIP=false
+[[ "$FROM_STEP" == "s0" ]] && SKIP=false
 
 for entry in "${STEPS[@]}"; do
   KEY="${entry%%:*}"

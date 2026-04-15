@@ -31,8 +31,31 @@ if [[ -z "$SUPABASE_URL" || -z "$SUPABASE_KEY" ]]; then
   exit 1
 fi
 
+if [[ "$SUPABASE_KEY" == *"REPLACE_WITH_ACTUAL"* ]]; then
+  crew_fail \
+    --step    "$STEP" \
+    --persona "dr_crusher" \
+    --tool    "health_check" \
+    --tool-args '{"fix": true}' \
+    --context "The SUPABASE_KEY is still using a placeholder value from .zshrc." \
+    --error   "Placeholder detected: $SUPABASE_KEY"
+  exit 1
+fi
+
 echo "  Supabase URL: $SUPABASE_URL"
 echo "  Key prefix  : ${SUPABASE_KEY:0:8}…"
+
+# ── Pre-flight JWT Validation ────────────────────────────────────────────────
+if [[ ! "$SUPABASE_KEY" =~ ^eyJhbGci ]]; then
+  crew_fail \
+    --step    "$STEP" \
+    --persona "dr_crusher" \
+    --tool    "health_check" \
+    --tool-args '{"fix": true}' \
+    --context "The SUPABASE_KEY in .env does not appear to be a valid JWT (should start with 'eyJ...')." \
+    --error   "Invalid key format. Current prefix: ${SUPABASE_KEY:0:10}"
+  exit 1
+fi
 
 # ── Hit the /rest/v1/ health endpoint ────────────────────────────────────────
 echo ""
@@ -93,13 +116,18 @@ fi
 # ── Verify the missions table exists (vector memory table) ────────────────────
 echo ""
 echo "  Checking for 'missions' vector table..."
-TABLE_STATUS=$(curl -s -o /tmp/supa-table.json -w "%{http_code}" \
+TABLE_RESP=$(curl -s -H "apikey: $SUPABASE_KEY" \
+  -H "Authorization: Bearer $SUPABASE_KEY" \
+  -H "Accept: application/vnd.pgrst.plan+json" \
+  "${SUPABASE_URL}/rest/v1/missions?limit=1" 2>&1) || TABLE_RESP=""
+
+TABLE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
   -H "apikey: $SUPABASE_KEY" \
   -H "Authorization: Bearer $SUPABASE_KEY" \
   "${SUPABASE_URL}/rest/v1/missions?limit=1" 2>&1) || TABLE_STATUS="000"
 
 if [[ "$TABLE_STATUS" == "200" ]]; then
-  echo "  ✔  missions table exists and is queryable"
+  echo "  ✔  missions table exists, is queryable, and API permissions are valid"
 elif [[ "$TABLE_STATUS" == "404" || "$TABLE_STATUS" == "406" ]]; then
   echo "  ⚠  missions table not found (HTTP $TABLE_STATUS)"
   echo "     Run the Supabase migrations in supabase/migrations/ to create it."
