@@ -104,6 +104,7 @@ const ROLES = {
   ARCHITECT: "You are a DDD Architect. Your goal is to validate mission objectives against historical constraints.",
   DEVELOPER: "You are a Senior Full-Stack Developer. Your goal is to generate clean, production-ready DDD code blocks.",
   QA_AUDITOR: "You are a Senior QA Auditor. Your goal is to review past mission outcomes and evolutionary history to provide specific technical suggestions for improving the current scaffolding plan.",
+  CRITIC: "You are the System Critic. Your goal is to evaluate mission outcomes, identify technical debt, and suggest systemic improvements.",
   CREW_MANAGER: "You are a Sovereign Crew Manager. Your goal is to coordinate specialized agents to build, manage, and evolve the AI Enterprise OS itself, following the Product Factory philosophy."
 };
 
@@ -123,6 +124,7 @@ const MODEL_CONFIG = {
   ARCHITECT:   process.env.MODEL_ARCHITECT   || 'anthropic/claude-3-haiku',
   DEVELOPER:   process.env.MODEL_DEVELOPER   || 'anthropic/claude-3-5-sonnet',
   QA_AUDITOR:  process.env.MODEL_QA_AUDITOR  || 'openai/gpt-4o-mini',
+  CRITIC:      process.env.MODEL_CRITIC      || 'openai/gpt-4o-mini',
   CREW_MANAGER:process.env.MODEL_CREW_MANAGER|| 'anthropic/claude-3-haiku',
   EMBEDDING:   process.env.MODEL_EMBEDDING   || 'openai/text-embedding-3-small',
 };
@@ -348,42 +350,77 @@ async function runMission(project, objective){
     }
   }
 
-  const result = { plan, execution, validation, decision, history };
+  let result = { plan, execution, validation, decision, history };
+
+  // 4. Observation Lounge: Post-mission reflection and meta-learning
+  const observation = await conductObservationLounge(objective, result);
+  result.observation = observation;
 
   // Persist the successful mission outcome to long-term vector memory
-  await storeMissionResult(`Objective: ${objective}\nDecision: ${decision}`, {
+  await storeMissionResult(`Objective: ${objective}\nDecision: ${decision}\nReflection: ${observation.summary}`, {
     project,
-    objective
+    objective,
+    score: observation.score
   });
 
   return result;
 }
 
 /**
- * Recalls historical mission data from Supabase and checks Redis for active session cache.
+ * Recalls historical data from both 'missions' and 'observations' tables.
+ * Uses Redis as a primary cache to minimize OpenRouter embedding costs.
+ * 
  * @param {string} objective - The mission objective to search for.
  */
 async function recallMemory(objective) {
+  const { redis, supabase } = getMemorySystems();
+  
+  // 1. Cost-Effective Check: Is this context already in Redis?
+  // We use a hash of the objective to create a stable cache key
+  const cacheKey = `memory:context:${Buffer.from(objective).toString('hex').substring(0, 32)}`;
+  
   try {
-    const { supabase } = getMemorySystems();
-    // 1. Generate an embedding for the current objective
+    const cachedResult = await redis.get(cacheKey);
+    if (cachedResult) {
+      console.log(`[Memory] Cache Hit: Retrieved context from Redis for "${objective.substring(0, 20)}..."`);
+      return cachedResult;
+    }
+
+    // 2. Generate embedding (Only if cache misses)
     const embedding = await generateEmbedding(objective);
     if (!embedding) return "Memory recall unavailable (embedding failed).";
 
-    // 2. Query Supabase using the vectorized embedding
-    const { data: matches, error } = await supabase.rpc('match_missions', {
-      query_embedding: embedding,
-      match_threshold: 0.5,
-      match_count: 3,
-    });
+    // 3. Concurrent Retrieval: Search both Experience (Missions) and Insights (Observations)
+    const [missionRes, observationRes] = await Promise.all([
+      supabase.rpc('match_missions', {
+        query_embedding: embedding,
+        match_threshold: 0.4,
+        match_count: 3,
+      }),
+      supabase.rpc('match_observations', {
+        query_embedding: embedding,
+        match_threshold: 0.4,
+        match_count: 3,
+      })
+    ]);
 
-    if (error || !matches || matches.length === 0) {
-      return "No relevant past memory found in Supabase.";
+    let contextBlocks = [];
+
+    if (missionRes.data?.length > 0) {
+      contextBlocks.push(...missionRes.data.map(m => `[Historical Mission]: ${m.content}`));
     }
 
-    return matches.map(m => `[Past Experience]: ${m.content}`).join('\n');
+    if (observationRes.data?.length > 0) {
+      contextBlocks.push(...observationRes.data.map(o => `[System Insight - ${o.crew_member}]: ${o.summary}\nKey Findings: ${o.key_findings?.join(', ')}`));
+    }
+
+    const finalContext = contextBlocks.length > 0 ? contextBlocks.join('\n\n') : "No relevant past memory found.";
+
+    // 4. Cache the result for 1 hour to prevent redundant LLM/DB calls
+    await redis.set(cacheKey, finalContext, 'EX', 3600);
+    return finalContext;
   } catch (err) {
-    console.error('[Memory] Error recalling from Supabase:', err.message);
+    console.error('[Memory] Error during dual-table recall:', err.message);
     return "Memory recall unavailable.";
   }
 }
@@ -417,15 +454,110 @@ Keep suggestions concise.
       },
       body: JSON.stringify({
         model: MODEL_CONFIG.QA_AUDITOR,
+        response_format: { type: "text" },
         messages: [{ role: "user", content: prompt }]
       })
     });
+
+    if (!response.ok) {
+      throw new Error(`OpenRouter QA Audit failed: ${response.status} ${response.statusText}`);
+    }
 
     const data = await response.json();
     return data.choices[0].message.content.trim();
   } catch (error) {
     console.error("QA Audit failed:", error);
     return "Default QA standards applied.";
+  }
+}
+
+/**
+ * Observation Lounge: Conducts a post-mission critique to store meta-learning insights.
+ */
+async function conductObservationLounge(objective, missionResult) {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) return { summary: "Observation skipped: No API Key", score: 0 };
+
+  const prompt = `
+${ROLES.CRITIC}
+
+Objective: ${objective}
+Mission Plan: ${missionResult.plan}
+Decision Rationale: ${missionResult.decision}
+
+Review the mission execution above. Per v11 Architecture protocols, provide:
+1. A performance score (1-10)
+2. Critical weaknesses or technical debt introduced
+3. Systemic improvements for future missions
+4. A concise "stored_insight" for semantic memory
+
+Return as a JSON object:
+{
+  "score": number,
+  "weaknesses": string[],
+  "improvements": string[],
+  "summary": string
+}
+`;
+
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: MODEL_CONFIG.CRITIC,
+        response_format: { type: "json_object" },
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+
+    if (!response.ok) throw new Error(`Observation Lounge failed: ${response.status}`);
+
+    const data = await response.json();
+    const observation = JSON.parse(data.choices[0].message.content.trim());
+    
+    // Persist specifically to the observations table
+    await storeObservation(objective, observation);
+    
+    return observation;
+  } catch (error) {
+    console.error("[Lounge] Failed to conduct observation:", error.message);
+    return { summary: "Reflection failed during execution.", score: 0 };
+  }
+}
+
+/**
+ * Persists structured reflections to the Supabase 'observations' table.
+ */
+async function storeObservation(objective, observation) {
+  try {
+    const { supabase } = getMemorySystems();
+    const content = `Insight for "${objective}": ${observation.summary}. Improvements: ${observation.improvements.join(', ')}`;
+    const embedding = await generateEmbedding(content);
+    
+    if (!embedding) return;
+
+    const { error } = await supabase
+      .from('observations')
+      .insert([{
+        crew_member: 'System Critic',
+        title: `Reflection: ${objective}`,
+        summary: observation.summary,
+        key_findings: observation.weaknesses,
+        recommendations: observation.improvements,
+        score: observation.score,
+        embedding,
+        metadata: { objective, timestamp: new Date().toISOString() }
+      }]);
+
+    if (error) throw error;
+    console.log(`[Lounge] Insight stored for: ${objective}`);
+  } catch (err) {
+    // Non-fatal, don't crash the mission if logging the observation fails
+    console.error('[Lounge] Persistence Error:', err.message);
   }
 }
 
@@ -474,6 +606,10 @@ async function generateEmbedding(text) {
         input: text
       })
     });
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Embedding API failed: ${response.status} - ${errText}`);
+    }
     const data = await response.json();
     return data.data[0].embedding;
   } catch (error) {
@@ -522,15 +658,21 @@ Return ONLY the raw JSON object. Do not include markdown code blocks, explanatio
       },
       body: JSON.stringify({
         model: MODEL_CONFIG.DEVELOPER,
+        response_format: { type: "json_object" },
         messages: [{ role: "user", content: prompt }]
       })
     });
 
+    if (!response.ok) {
+      throw new Error(`Developer LLM call failed: ${response.status}`);
+    }
+
     const data = await response.json();
     let content = data.choices[0].message.content.trim();
 
-    // Clean up markdown code blocks if the LLM provided them
-    content = content.replace(/^```json\n/i, "").replace(/^```\n/i, "").replace(/\n```$/g, "");
+    // More robust JSON extraction from potential markdown padding
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) content = jsonMatch[0];
 
     return JSON.parse(content);
   } catch (error) {
