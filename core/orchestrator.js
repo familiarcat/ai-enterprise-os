@@ -109,24 +109,17 @@ const ROLES = {
 };
 
 /**
- * Per-role OpenRouter model configuration.
- * Override any entry via environment variables to tune cost vs. quality.
- *
- * Cost tiers (approximate, via OpenRouter):
- *   google/gemini-flash-1.5        ~$0.000075 / 1K tokens  — pattern analysis, routing
- *   openai/gpt-4o-mini             ~$0.000150 / 1K tokens  — QA critique, integration
- *   anthropic/claude-3-haiku       ~$0.000250 / 1K tokens  — coordination, architecture
- *   anthropic/claude-3-5-sonnet    ~$0.003000 / 1K tokens  — code generation (quality matters)
- *   openai/text-embedding-3-small  ~$0.000020 / 1K tokens  — vector embeddings
+ * Universal Model Registry: Maps technical capabilities to optimized model endpoints.
+ * This allows any LLM Agent to understand the resource cost vs quality trade-offs.
  */
 const MODEL_CONFIG = {
-  ANALYST:     process.env.MODEL_ANALYST     || 'google/gemini-flash-1.5',
-  ARCHITECT:   process.env.MODEL_ARCHITECT   || 'anthropic/claude-3-haiku',
-  DEVELOPER:   process.env.MODEL_DEVELOPER   || 'anthropic/claude-3-5-sonnet',
-  QA_AUDITOR:  process.env.MODEL_QA_AUDITOR  || 'openai/gpt-4o-mini',
-  CRITIC:      process.env.MODEL_CRITIC      || 'openai/gpt-4o-mini',
-  CREW_MANAGER:process.env.MODEL_CREW_MANAGER|| 'anthropic/claude-3-haiku',
-  EMBEDDING:   process.env.MODEL_EMBEDDING   || 'openai/text-embedding-3-small',
+  TIER_ANALYSIS:   process.env.MODEL_ANALYST      || 'google/gemini-flash-1.5',   // High context, low cost
+  TIER_STRATEGIC:  process.env.MODEL_ARCHITECT    || 'anthropic/claude-3-haiku', // Fast reasoning
+  TIER_PRODUCTION: process.env.MODEL_DEVELOPER    || 'anthropic/claude-3-5-sonnet', // Maximum coding accuracy
+  TIER_CRITIQUE:   process.env.MODEL_QA_AUDITOR   || 'openai/gpt-4o-mini',       // High detail, low cost
+  TIER_EMBEDDING:  process.env.MODEL_EMBEDDING    || 'openai/text-embedding-3-small',
+  // Legacy mappings for backward compatibility
+  ...Object.fromEntries(Object.entries({ ANALYST: 'TIER_ANALYSIS', ARCHITECT: 'TIER_STRATEGIC', DEVELOPER: 'TIER_PRODUCTION', CRITIC: 'TIER_CRITIQUE' }).map(([k, v]) => [k, process.env[`MODEL_${k}`] || '']))
 };
 
 /**
@@ -208,6 +201,40 @@ function invokeUnzipSearchTool(options) {
     child.on('error', (err) => {
       clearTimeout(timeoutHandle);
       reject(new Error(`Failed to start UnzipSearchTool: ${err.message}`));
+    });
+  });
+}
+
+/**
+ * Bridge to fetch YouTube transcripts for the Analyst agent.
+ */
+function invokeYoutubeTranscriptTool(url) {
+  return new Promise((resolve, reject) => {
+    const scriptPath = path.resolve(__dirname, '../tools/youtube_transcript_tool.py');
+    const pythonBin = getPythonBin();
+    const child = spawn(pythonBin, [scriptPath]);
+
+    child.stdin.write(JSON.stringify({ url }));
+    child.stdin.end();
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout.on('data', (data) => { stdout += data.toString(); });
+    child.stderr.on('data', (data) => { stderr += data.toString(); });
+
+    child.on('close', (code) => {
+      if (code === 0) {
+        try {
+          const result = JSON.parse(stdout);
+          if (result.success) resolve(result.transcript);
+          else reject(new Error(result.error));
+        } catch (e) {
+          reject(new Error("Failed to parse Python output"));
+        }
+      } else {
+        reject(new Error(`Transcript tool failed: ${stderr}`));
+      }
     });
   });
 }
@@ -1072,7 +1099,7 @@ async function analyzeEvolution(versionsFolder, rootPath) {
   for (const version of versions) {
     const versionPath = path.join(versionsFolder, version);
     // Get both the decisions and the structural layout of the version
-    const [context, tree] = await Promise.all([
+    const [context, tree, observations] = await Promise.all([
       invokeUnzipSearchTool({
         path: versionPath,
         function_name: 'Decisions',
@@ -1083,11 +1110,13 @@ async function analyzeEvolution(versionsFolder, rootPath) {
         path: versionPath,
         function_name: 'root',
         return_tree: true
-      })
+      }),
+      // Hydrate the evolution with previous Critic observations if available
+      recallMemory(`Evolutionary critique for version ${version}`)
     ]);
 
     if (context.includes('--- Found') || tree.includes('--- Scanned')) {
-      summaries.push(`--- Evolution Step: ${version} ---\n[STRUCTURE]\n${tree}\n[DECISIONS]\n${context}`);
+      summaries.push(`--- Evolution Step: ${version} ---\n[STRUCTURE]\n${tree}\n[DECISIONS]\n${context}\n[CRITIQUE]\n${observations}`);
     }
   }
 
