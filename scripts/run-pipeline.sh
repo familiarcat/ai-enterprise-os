@@ -24,9 +24,11 @@ source "$SCRIPT_DIR/lib/crew-fail.sh"
 # ── Step registry (bash 3.2-compatible case lookup) ──────────────────────────
 get_step_file() {
   case "$1" in
-    p0-s1) echo "p0-s1-env-check.sh" ;;
-    p0-s2) echo "p0-s2-redis-ping.sh" ;;
-    p0-s3) echo "p0-s3-supabase-check.sh" ;;
+    p0-s0)  echo "p0-s0-secrets-sync.sh" ;;
+    p0-s1)  echo "p0-s1-env-check.sh" ;;
+    p0-s2)  echo "p0-s2-redis-ping.sh" ;;
+    p0-s3)  echo "p0-s3-supabase-check.sh" ;;
+    p0-s3b) echo "p0-s3b-supabase-migrate.sh" ;;
     p0-s4) echo "p0-s4-bridge-start.sh" ;;
     p0-s5) echo "p0-s5-dashboard-wire.sh" ;;
     p0-s6) echo "p0-s6-smoke-test.sh" ;;
@@ -55,7 +57,7 @@ get_step_file() {
 }
 
 STEP_ORDER=(
-  p0-s1 p0-s2 p0-s3 p0-s4 p0-s5 p0-s6
+  p0-s0 p0-s1 p0-s2 p0-s3 p0-s3b p0-s4 p0-s5 p0-s6
   p1-s1 p1-s2 p1-s3 p1-s4 p1-s5
   p2-s1 p2-s2 p2-s3 p2-s4 p2-s5
   p3-s1 p3-s2 p3-s3 p3-s4 p3-s5
@@ -152,7 +154,7 @@ fi
 echo ""
 echo -e "${_BLD}${_CYN}╔══════════════════════════════════════════════════════════════╗${_RST}"
 echo -e "${_BLD}${_CYN}║        SOVEREIGN FACTORY — FULL DEPLOYMENT PIPELINE          ║${_RST}"
-echo -e "${_BLD}${_CYN}║        Phase 0 → 4  (26 steps total)                        ║${_RST}"
+echo -e "${_BLD}${_CYN}║        Phase 0 → 4  (28 steps total)                        ║${_RST}"
 echo -e "${_BLD}${_CYN}╚══════════════════════════════════════════════════════════════╝${_RST}"
 echo ""
 echo "  On failure: a crew-dispatched Claude Code prompt will be generated."

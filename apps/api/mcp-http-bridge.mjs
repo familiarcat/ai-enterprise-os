@@ -196,8 +196,9 @@ function createMCPServer() {
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
-    if ((name === 'run_factory_mission' || name === 'run_batch_missions') && !process.env.OPENROUTER_API_KEY) {
-      return { isError: true, content: [{ type: 'text', text: 'Error: OPENROUTER_API_KEY is not set on the MCP bridge.' }] };
+    const LLM_TOOLS = ['run_factory_mission', 'run_batch_missions', 'run_crew_agent', 'search_code'];
+    if (LLM_TOOLS.includes(name) && !process.env.OPENROUTER_API_KEY) {
+      return { isError: true, content: [{ type: 'text', text: `Error: OPENROUTER_API_KEY is not set on the MCP bridge. Required for tool: ${name}` }] };
     }
 
     let result;

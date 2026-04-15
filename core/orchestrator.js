@@ -113,13 +113,16 @@ const ROLES = {
  * This allows any LLM Agent to understand the resource cost vs quality trade-offs.
  */
 const MODEL_CONFIG = {
-  TIER_ANALYSIS:   process.env.MODEL_ANALYST      || 'google/gemini-flash-1.5',   // High context, low cost
-  TIER_STRATEGIC:  process.env.MODEL_ARCHITECT    || 'anthropic/claude-3-haiku', // Fast reasoning
-  TIER_PRODUCTION: process.env.MODEL_DEVELOPER    || 'anthropic/claude-3-5-sonnet', // Maximum coding accuracy
-  TIER_CRITIQUE:   process.env.MODEL_QA_AUDITOR   || 'openai/gpt-4o-mini',       // High detail, low cost
+  TIER_ANALYSIS:   process.env.MODEL_ANALYST      || 'google/gemini-flash-1.5',      // High context, low cost
+  TIER_STRATEGIC:  process.env.MODEL_ARCHITECT    || 'anthropic/claude-3-haiku',     // Fast reasoning
+  TIER_PRODUCTION: process.env.MODEL_DEVELOPER    || 'anthropic/claude-3-5-sonnet',  // Maximum coding accuracy
+  TIER_CRITIQUE:   process.env.MODEL_QA_AUDITOR   || 'openai/gpt-4o-mini',           // High detail, low cost
   TIER_EMBEDDING:  process.env.MODEL_EMBEDDING    || 'openai/text-embedding-3-small',
-  // Legacy mappings for backward compatibility
-  ...Object.fromEntries(Object.entries({ ANALYST: 'TIER_ANALYSIS', ARCHITECT: 'TIER_STRATEGIC', DEVELOPER: 'TIER_PRODUCTION', CRITIC: 'TIER_CRITIQUE' }).map(([k, v]) => [k, process.env[`MODEL_${k}`] || '']))
+  // Role-key aliases — resolve to tier defaults, never empty strings
+  ANALYST:   process.env.MODEL_ANALYST    || 'google/gemini-flash-1.5',
+  ARCHITECT: process.env.MODEL_ARCHITECT  || 'anthropic/claude-3-haiku',
+  DEVELOPER: process.env.MODEL_DEVELOPER  || 'anthropic/claude-3-5-sonnet',
+  CRITIC:    process.env.MODEL_QA_AUDITOR || 'openai/gpt-4o-mini',
 };
 
 /**
@@ -292,15 +295,38 @@ function invokeCrewAgent(options) {
  * Executes Git operations to fulfill mission persistence.
  */
 async function gitOperation(project, action, message) {
+  const cwd = path.resolve(__dirname, '..');
+
+  // For commit: two sequential spawns — no shell: true, no injection surface.
+  if (action === 'commit') {
+    return new Promise((resolve, reject) => {
+      const addChild = spawn('git', ['add', '.'], { cwd });
+      let addErr = '';
+      addChild.stderr.on('data', (d) => addErr += d.toString());
+      addChild.on('close', (addCode) => {
+        if (addCode !== 0) return reject(new Error(`git add failed: ${addErr}`));
+        // Sanitize commit message — strip control characters and null bytes
+        const safeMsg = String(message || 'chore: pipeline commit').replace(/[\x00-\x1f\x7f]/g, ' ').trim();
+        const commitChild = spawn('git', ['commit', '-m', safeMsg], { cwd });
+        let out = '', err = '';
+        commitChild.stdout.on('data', (d) => out += d.toString());
+        commitChild.stderr.on('data', (d) => err += d.toString());
+        commitChild.on('close', (code) => {
+          if (code === 0) resolve(out || 'Commit successful');
+          else reject(new Error(err || `git commit failed with code ${code}`));
+        });
+      });
+    });
+  }
+
   return new Promise((resolve, reject) => {
     const commands = {
-      commit: ['add', '.', '&&', 'git', 'commit', '-m', `"${message}"`],
       push: ['push', 'origin', 'main'],
-      status: ['status']
+      status: ['status'],
     };
 
     const args = commands[action] || commands.status;
-    const child = spawn('git', args, { shell: true, cwd: path.resolve(__dirname, '..') });
+    const child = spawn('git', args, { cwd });
 
     let stdout = '';
     let stderr = '';
@@ -655,7 +681,15 @@ async function generateComponentContent(objective, history, suggestions = "") {
     return {};
   }
 
+  // Load the Mission Directive to preempt the prompt with project DNA
+  const directivePath = path.resolve(__dirname, '../MISSION_DIRECTIVE.md');
+  const directive = fs.existsSync(directivePath) 
+    ? fs.readFileSync(directivePath, 'utf-8') 
+    : "Follow standard DDD and v11 protocols.";
+
   const prompt = `
+${directive}
+
 ${ROLES.DEVELOPER}
 
 Objective: ${objective}
@@ -690,18 +724,25 @@ Return ONLY the raw JSON object. Do not include markdown code blocks, explanatio
       })
     });
 
-    if (!response.ok) {
-      throw new Error(`Developer LLM call failed: ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`Developer LLM call failed: ${response.status}`);
 
     const data = await response.json();
-    let content = data.choices[0].message.content.trim();
+    const rawContent = data.choices[0].message.content.trim();
 
-    // More robust JSON extraction from potential markdown padding
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) content = jsonMatch[0];
-
-    return JSON.parse(content);
+    try {
+      // More robust JSON extraction from potential markdown padding
+      const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+      const cleanJson = jsonMatch ? jsonMatch[0] : rawContent;
+      return JSON.parse(cleanJson);
+    } catch (parseError) {
+      console.error("[Developer] JSON Parse failed. Attempting auto-fix mission.");
+      // Self-correction: recursively attempt a fix with the error context
+      return await generateComponentContent(
+        `Fix JSON formatting for: ${objective}. Error: ${parseError.message}`, 
+        history, 
+        "Ensure raw JSON object only."
+      );
+    }
   } catch (error) {
     console.error("OpenRouter API call failed:", error);
     return {};
