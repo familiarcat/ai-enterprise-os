@@ -7,7 +7,7 @@ const { CallToolRequestSchema, ListToolsRequestSchema } = require("@modelcontext
 const { 
   invokeUnzipSearchTool, runMission, runMissions, getVersionsHierarchy, 
   manageProject, manageSprint, manageTask, invokeCrewAgent, gitOperation,
-  verifyIntegrity
+  verifyIntegrity, listAvailableMCPs
 } = require("../../core/orchestrator.js");
 
 const server = new Server({
@@ -164,6 +164,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
         required: ["action"]
       }
+    },
+    {
+      name: "list_available_mcps",
+      description: "Lists available MCP servers from the factory registry with Worf's security audit.",
+      inputSchema: {
+        type: "object",
+        properties: {}
+      }
     }
   ]
 }));
@@ -206,6 +214,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     result = await invokeCrewAgent(args);
   } else if (name === "git_operation") {
     result = await gitOperation(args.project, args.action, args.message);
+  } else if (name === "list_available_mcps") {
+    result = await listAvailableMCPs();
   } else if (name === "health_check") {
     const { spawnSync } = require('child_process');
     const scriptArgs = [path.resolve(__dirname, '../../scripts/verify_health.sh')];

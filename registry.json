@@ -1,0 +1,32 @@
+[
+  {
+    "name": "Postgres MCP",
+    "source": "github.com/modelcontextprotocol/servers/postgres",
+    "capabilities": ["read_query", "list_tables", "describe_schema"],
+    "tier": "Production"
+  },
+  {
+    "name": "GitHub MCP",
+    "source": "github.com/modelcontextprotocol/servers/github",
+    "capabilities": ["create_issue", "search_repos", "get_pull_request"],
+    "tier": "Strategic"
+  },
+  {
+    "name": "Slack MCP",
+    "source": "github.com/modelcontextprotocol/servers/slack",
+    "capabilities": ["post_message", "list_channels"],
+    "tier": "Communication"
+  },
+  {
+    "name": "Google Maps MCP",
+    "source": "github.com/modelcontextprotocol/servers/google-maps",
+    "capabilities": ["search_places", "get_distance"],
+    "tier": "Utility"
+  },
+  {
+    "name": "Fetch MCP",
+    "source": "github.com/modelcontextprotocol/servers/fetch",
+    "capabilities": ["http_get", "http_post"],
+    "tier": "Standard"
+  }
+]

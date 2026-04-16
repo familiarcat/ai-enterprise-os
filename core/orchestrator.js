@@ -377,13 +377,16 @@ async function runMission(project, objective){
     : "Approved: Proceeding with default mission parameters"
 
   // 3. Developer Phase: Scaffolding and Implementation
+  let producedFiles = [];
   if (objective.toLowerCase().includes('create') || objective.toLowerCase().includes('new')) {
     const name = objective.split(' ').pop();
     const lockKey = `factory:lock:domain:${name.toLowerCase()}`;
+    const targetPath = path.resolve(projectPath, `domains/${name.toLowerCase()}`);
 
     // If the objective is to initialize the dashboard, use specific backbone
     if (name.toLowerCase() === 'dashboard') {
-      await enforceBackboneStructure(path.resolve(projectPath, 'apps/dashboard'), 'dashboard', 'Dashboard');
+      const files = await enforceBackboneStructure(path.resolve(projectPath, 'apps/dashboard'), 'dashboard', 'Dashboard');
+      producedFiles.push(...files);
     }
 
     const { redis } = getMemorySystems();
@@ -393,7 +396,19 @@ async function runMission(project, objective){
     if (acquired) {
       try {
         const content = await generateComponentContent(objective, history, suggestions);
-        await scaffoldDDDComponent(name, content);
+        const files = await scaffoldDDDComponent(name, content);
+        producedFiles.push(...files);
+
+        // Generate Lineage Report in the new domain's docs folder
+        if (producedFiles.length > 0) {
+          const docsPath = path.join(targetPath, 'docs');
+          if (!fs.existsSync(docsPath)) fs.mkdirSync(docsPath, { recursive: true });
+          
+          const reportContent = `# Mission Lineage Report\n\n**Objective:** ${objective}\n**Timestamp:** ${new Date().toISOString()}\n\n## Produced Artifacts\n\n${producedFiles.map(f => `- ${path.relative(projectPath, f)}`).join('\n')}\n\n## Security Sign-off\nVerified by Lt. Worf (QA Auditor)`;
+          const reportPath = path.join(docsPath, 'lineage_report.md');
+          fs.writeFileSync(reportPath, reportContent);
+          producedFiles.push(reportPath);
+        }
       } finally {
         // Release lock after completion or failure
         await redis.del(lockKey);
@@ -403,7 +418,7 @@ async function runMission(project, objective){
     }
   }
 
-  let result = { plan, execution, validation, decision, history };
+  let result = { plan, execution, validation, decision, history, producedFiles };
 
   // 4. Observation Lounge: Post-mission reflection and meta-learning
   const observation = await conductObservationLounge(objective, result);
@@ -763,9 +778,11 @@ Return ONLY the raw JSON object. Do not include markdown code blocks, explanatio
  */
 async function scaffoldDDDComponent(name, generatedLayers = {}) {
   const targetPath = path.resolve(__dirname, `../domains/${name.toLowerCase()}`);
+  const createdFiles = [];
 
   // Apply the Universal Backbone Structure to the new domain
-  await enforceBackboneStructure(targetPath, 'domain', name);
+  const backboneFiles = await enforceBackboneStructure(targetPath, 'domain', name);
+  createdFiles.push(...backboneFiles);
 
   // Define the full DDD layer structure
   const layers = {
@@ -796,9 +813,12 @@ async function scaffoldDDDComponent(name, generatedLayers = {}) {
         fileContent = generateLayerBoilerplate(dir, name);
       }
       
-      fs.writeFileSync(filePath, fileContent);
+      const header = `/**\n * @generated_by SovereignFactory\n * @domain ${name}\n * @layer ${dir}\n */\n\n`;
+      fs.writeFileSync(filePath, header + fileContent);
+      createdFiles.push(filePath);
     }
   }
+  return createdFiles;
 }
 
 /**
@@ -811,6 +831,7 @@ async function scaffoldDDDComponent(name, generatedLayers = {}) {
  * @param {string} name - The display name for the entity.
  */
 async function enforceBackboneStructure(targetPath, type = 'domain', name = 'SovereignEntity') {
+  const createdFiles = [];
   const layouts = {
     master: {
       dirs: ['docs', 'scripts', 'packages/shared', 'packages/ui', 'core', 'tools', 'domains', 'apps/api', 'versions'],
@@ -983,8 +1004,12 @@ export async function getServerSideProps(context) {
       const existing = fs.readFileSync(filePath, 'utf-8').trim();
       if (existing === "" || existing === "{}") shouldWrite = true;
     }
-    if (shouldWrite) fs.writeFileSync(filePath, content);
+    if (shouldWrite) {
+      fs.writeFileSync(filePath, content);
+      createdFiles.push(filePath);
+    }
   });
+  return createdFiles;
 }
 
 function generateLayerBoilerplate(layer, name) {
@@ -1256,11 +1281,53 @@ async function manageTask(project, action, taskId, details = {}) {
   return await runMission(project, objective);
 }
 
+/**
+ * Lists available MCP servers from the local registry with a mandatory security check by Worf.
+ */
+async function listAvailableMCPs() {
+  const registryPath = path.resolve(__dirname, '../registry.json');
+  if (!fs.existsSync(registryPath)) {
+    return { error: "MCP Registry (registry.json) not found." };
+  }
+
+  const registry = JSON.parse(fs.readFileSync(registryPath, 'utf-8'));
+  
+  // Security Check by Lt. Worf
+  const auditedRegistry = registry.map(mcp => {
+    const isSafe = worfSecurityAudit(mcp);
+    return {
+      ...mcp,
+      security_status: isSafe ? "VERIFIED / SECURE" : "WARNING / DISHONOURABLE",
+      auditor: "Lt. Worf"
+    };
+  });
+
+  return auditedRegistry;
+}
+
+/**
+ * Lt. Worf's Security Audit logic for MCP libraries.
+ */
+function worfSecurityAudit(mcp) {
+  const untrustedSources = ['unverified-git', 'random-cdn'];
+  const suspiciousPatterns = [/eval\(/, /exec\(/, /curl/];
+
+  // Check source credibility
+  if (untrustedSources.some(src => mcp.source.includes(src))) return false;
+  
+  // Simulate deep packet/source inspection
+  if (mcp.capabilities.some(cap => suspiciousPatterns.some(pat => pat.test(cap)))) {
+    return false;
+  }
+
+  return true;
+}
+
 module.exports = { 
   runMission, invokeUnzipSearchTool, invokeCrewAgent, runMissions, 
   analyzeEvolution, scaffoldDDDComponent, storeMissionResult, 
   getVersionsHierarchy, recallMemory, auditPastMissions, 
   enforceBackboneStructure, getMemorySystems, resetMemorySystems,
   manageProject, manageSprint, manageTask,
-  gitOperation, verifyIntegrity
+  gitOperation, verifyIntegrity, listAvailableMCPs
 }

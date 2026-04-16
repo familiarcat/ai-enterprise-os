@@ -24,6 +24,7 @@ export interface AgentViewportProps {
     tokensUsed?:      number;
     cost?:            number;
     executionTimeMs?: number;
+    producedFiles?:   string[];
   };
   cached?:   boolean;
   isActive?: boolean;
@@ -96,6 +97,18 @@ export default function SovereignAgentViewport({
           </span>
         </div>
       </div>
+
+      {/* Produced Files Breadcrumbs */}
+      {metadata?.producedFiles && metadata.producedFiles.length > 0 && (
+        <div className="px-6 py-2 border-b-2 border-black bg-zinc-50 flex gap-2 overflow-x-auto scrollbar-hide">
+          <span className="text-[9px] font-black uppercase text-red-600 whitespace-nowrap">Artifacts:</span>
+          {metadata.producedFiles.map((f, i) => (
+            <span key={i} className="text-[9px] font-mono font-bold text-black bg-white border border-black px-1 whitespace-nowrap">
+              {f.split('/').pop()}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Stream content */}
       <div 

@@ -22,6 +22,7 @@ export interface AgentExecution {
   cost?:        number;
   durationMs?:  number;
   cached?:      boolean;
+  producedFiles?: string[];
 }
 
 interface ObservationLoungeProps {

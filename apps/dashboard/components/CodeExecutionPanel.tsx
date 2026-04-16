@@ -120,6 +120,20 @@ export default function CodeExecutionPanel({
                   {exec.output}
                 </pre>
               </div>
+
+              {exec.producedFiles && exec.producedFiles.length > 0 && isExpanded && (
+                <div className="p-8 bg-white border-t-2 border-black">
+                  <div className="text-[10px] font-black uppercase tracking-[0.2em] text-red-600 mb-4">05 / Artifact Traceability</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {exec.producedFiles.map((file, idx) => (
+                      <div key={idx} className="flex items-center gap-2 p-2 border border-black text-[10px] font-mono truncate">
+                        <span className="text-red-600">📄</span>
+                        {file}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
