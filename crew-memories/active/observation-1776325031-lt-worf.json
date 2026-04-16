@@ -1,0 +1,12 @@
+{
+  "type": "observation",
+  "crew_member": "Lt. Worf",
+  "role": "Chief of Security, Senior QA Auditor",
+  "title": "Security Audit — 2026-04-16 (pre-push)",
+  "summary": "Security audit completed with warnings. These are not dishonourable — but they must be addressed before production deployment.",
+  "key_findings": ["Git",".gitignore:","Git","GitHub","WARNING:","Local"],
+  "conclusions": ["Overall","Context:","HOLD:"],
+  "recommendations": ["Run:"],
+  "tags": ["security","ci-cd","worf","pre-push"],
+  "timestamp": "2026-04-16T07:37:11.000Z"
+}

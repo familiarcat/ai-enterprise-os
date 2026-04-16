@@ -243,18 +243,18 @@ export default function MissionControl() {
                 onClick={() => canClick && setStep(s.id)}
                 disabled={!canClick}
                 className={[
-                  'flex flex-col p-6 text-left border-r-2 last:border-r-0 border-black transition-all',
+                  'flex flex-col p-6 text-left border-r-2 last:border-r-0 border-black transition-all duration-200',
                   isActive
-                    ? 'bg-black text-white'
+                    ? 'bg-black text-white shadow-[inset_0_0_0_2px_black]'
                     : isDone
-                      ? 'bg-white text-black/40 hover:text-black cursor-pointer'
-                      : 'bg-white text-black/20 cursor-default',
+                      ? 'bg-white text-black hover:bg-zinc-50 cursor-pointer'
+                      : 'bg-white text-black/10 cursor-default',
                 ].join(' ')}
               >
-                <span className="text-xs font-bold uppercase tracking-widest mb-4">0{s.id}</span>
+                <span className={['text-[10px] font-black uppercase tracking-[0.2em] mb-4', isActive ? 'text-red-500' : 'text-red-600/40'].join(' ')}>0{s.id} / PHASE</span>
                 <div className="flex items-center gap-2">
                   <span className="text-xl">{s.icon}</span>
-                  <span className="text-lg font-black uppercase tracking-tighter leading-none">{s.label}</span>
+                  <span className="text-xl font-black uppercase tracking-tighter leading-none">{s.label}</span>
                 </div>
               </button>
             );

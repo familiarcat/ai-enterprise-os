@@ -136,11 +136,11 @@ export default function TaskLLMPanel({ selectedCrew, onExecute, isLoading }: Tas
                   'flex flex-col items-center p-4 text-center transition-all',
                   isActive
                     ? 'bg-black text-white'
-                    : 'bg-white text-zinc-300 hover:text-black',
-                  !overrideTier && !isActive ? 'opacity-20 cursor-default' : 'cursor-pointer',
+                    : 'bg-white text-black hover:bg-zinc-50',
+                  !overrideTier && !isActive ? 'opacity-10 cursor-default' : 'cursor-pointer',
                 ].join(' ')}
               >
-                <span className="text-xs font-black tracking-widest">{t}</span>
+                <span className="text-xs font-black uppercase tracking-[0.2em]">{t}</span>
                 <span className="text-[9px] mt-1 font-bold truncate w-full opacity-60 uppercase">{modelId}</span>
               </button>
             );

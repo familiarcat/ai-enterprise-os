@@ -56,12 +56,15 @@ export default function CrewSelector({ selected, onChange, singleSelect = false 
     <div className="border-2 border-black bg-white">
       {/* Filter Header */}
       <div className="grid grid-cols-12 border-b-2 border-black">
-        <div className="col-span-12 md:col-span-8 border-b-2 md:border-b-0 md:border-r-2 border-black">
+        <div className="col-span-12 md:col-span-8 border-b-2 md:border-b-0 md:border-r-2 border-black relative">
+          <label className="absolute top-2 left-6 text-[9px] font-black text-red-600 uppercase tracking-[0.2em]">
+            01 / Input Filter
+          </label>
           <input
             value={filter}
             onChange={e => setFilter(e.target.value)}
-            placeholder="SEARCH CREW BY ROLE / CAPABILITY..."
-            className="w-full p-6 text-2xl font-black uppercase tracking-tighter text-black placeholder-zinc-200 focus:outline-none"
+            placeholder="SEARCH CREW BY ROLE..."
+            className="w-full pt-8 pb-4 px-6 text-2xl font-black uppercase tracking-tighter text-black placeholder-zinc-200 focus:outline-none"
           />
         </div>
         <div className="col-span-12 md:col-span-4 flex divide-x-2 divide-black">
@@ -101,17 +104,17 @@ export default function CrewSelector({ selected, onChange, singleSelect = false 
             key={agent.handle}
             onClick={() => toggle(agent.handle)}
             className={[
-              'group relative flex flex-col p-8 text-left border-r-2 border-b-2 border-black transition-all',
+              'group relative flex flex-col p-8 text-left border-r-2 border-b-2 border-black transition-all duration-75',
               selected.includes(agent.handle)
                 ? 'bg-red-600 text-white border-red-600 z-10'
-                : 'bg-white text-black hover:bg-zinc-50'
+                : 'bg-white text-black hover:bg-black hover:text-white'
             ].join(' ')}
           >
             <div className="flex justify-between items-start mb-8">
               <span className="text-5xl">{agent.emoji}</span>
               <div className="text-right">
-                <span className={['text-[9px] font-black uppercase tracking-[0.2em]', selected.includes(agent.handle) ? 'text-white/70' : 'text-red-500'].join(' ')}>
-                  01 / TIER
+                <span className={['text-[9px] font-black uppercase tracking-[0.2em]', selected.includes(agent.handle) ? 'text-white/70' : 'text-red-600 group-hover:text-red-500'].join(' ')}>
+                  02 / TIER
                 </span>
                 <div className="text-sm font-black uppercase tracking-tighter">{agent.preferredTier}</div>
               </div>

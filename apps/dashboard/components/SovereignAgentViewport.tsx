@@ -80,18 +80,18 @@ export default function SovereignAgentViewport({
       </div>
 
       {/* Metadata Strip */}
-      <div className="grid grid-cols-12 border-b-2 border-black text-[10px] font-bold uppercase tracking-widest bg-white">
+      <div className="grid grid-cols-12 border-b-2 border-black text-[10px] font-black uppercase tracking-widest bg-white">
         <div className="col-span-4 p-4 border-r-2 border-black">
-          <span className="text-red-500 block mb-1">01 / ID</span>
-          <span className="font-black text-black truncate block">{agentId}</span>
+          <span className="text-red-600 block mb-1">01 / ID</span>
+          <span className="text-black truncate block">{agentId}</span>
         </div>
         <div className="col-span-4 p-4 border-r-2 border-black">
-          <span className="text-red-500 block mb-1">02 / MODEL</span>
-          <span className="text-black truncate block font-black">{metadata?.model?.split('/').pop() || 'None'}</span>
+          <span className="text-red-600 block mb-1">02 / MODEL</span>
+          <span className="text-black truncate block">{metadata?.model?.split('/').pop() || 'None'}</span>
         </div>
         <div className="col-span-4 p-4">
-          <span className="text-red-500 block mb-1">03 / COST</span>
-          <span className="text-black block font-black">
+          <span className="text-red-600 block mb-1">03 / COST</span>
+          <span className="text-black block">
             {metadata?.cost !== undefined ? `$${metadata.cost.toFixed(4)}` : 'N/A'}
           </span>
         </div>
