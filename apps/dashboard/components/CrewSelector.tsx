@@ -17,90 +17,6 @@ interface CrewSelectorProps {
   singleSelect?: boolean;
 }
 
-const CAPABILITY_COLORS: Record<string, string> = {
-  'planning':           'bg-purple-500/20 text-purple-300 border-purple-500/30',
-  'coordination':       'bg-blue-500/20  text-blue-300  border-blue-500/30',
-  'data-analysis':      'bg-cyan-500/20  text-cyan-300  border-cyan-500/30',
-  'infrastructure':     'bg-orange-500/20 text-orange-300 border-orange-500/30',
-  'security':           'bg-red-500/20   text-red-300   border-red-500/30',
-  'content-generation': 'bg-pink-500/20  text-pink-300  border-pink-500/30',
-  'cost-optimization':  'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
-  'business-logic':     'bg-green-500/20 text-green-300  border-green-500/30',
-  'devops':             'bg-slate-500/20  text-slate-300  border-slate-500/30',
-  'communications':     'bg-teal-500/20  text-teal-300   border-teal-500/30',
-};
-
-const TIER_BADGE: Record<string, { label: string; cls: string }> = {
-  OPUS:           { label: 'OPUS',    cls: 'bg-purple-600/30 text-purple-200 border-purple-500/40' },
-  SONNET:         { label: 'SONNET',  cls: 'bg-blue-600/30   text-blue-200   border-blue-500/40' },
-  HAIKU:          { label: 'HAIKU',   cls: 'bg-gray-600/30   text-gray-300   border-gray-500/40' },
-  GPT_4O:         { label: 'GPT-4o',  cls: 'bg-green-600/30  text-green-200  border-green-500/40' },
-  GEMINI_1_5_PRO: { label: 'Gemini',  cls: 'bg-teal-600/30   text-teal-200   border-teal-500/40' },
-};
-
-function AgentCard({ agent, isSelected, onToggle }: {
-  agent: CrewAgent;
-  isSelected: boolean;
-  onToggle: () => void;
-}) {
-  const tier = TIER_BADGE[agent.preferredTier] ?? { label: agent.preferredTier, cls: 'bg-gray-600/30 text-gray-300 border-gray-500/40' };
-  const model = MODEL_ID_MAP[agent.preferredTier];
-
-  return (
-    <button
-      onClick={onToggle}
-      className={[
-        'w-full text-left p-4 rounded-xl border transition-all duration-200',
-        'hover:border-crew-green/40 hover:bg-white/5',
-        isSelected
-          ? 'border-crew-green/60 bg-crew-green/5 shadow-[0_0_12px_rgba(0,255,170,0.1)]'
-          : 'border-white/10 bg-black/20',
-      ].join(' ')}
-    >
-      {/* Top row: emoji + name + tier badge */}
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="flex items-center gap-2">
-          <span className="text-2xl">{agent.emoji}</span>
-          <div>
-            <div className="font-semibold text-white text-sm">{agent.displayName}</div>
-            <div className="text-[11px] text-gray-500 font-mono">{agent.handle}</div>
-          </div>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${tier.cls}`}>
-            {tier.label}
-          </span>
-          {isSelected && (
-            <span className="text-[10px] text-crew-green font-bold">✓ SELECTED</span>
-          )}
-        </div>
-      </div>
-
-      {/* Role */}
-      <p className="text-xs text-gray-400 leading-relaxed mb-3 line-clamp-2">
-        {agent.role}
-      </p>
-
-      {/* Model */}
-      <div className="text-[10px] text-gray-600 font-mono mb-2 truncate">
-        {model}
-      </div>
-
-      {/* Capabilities */}
-      <div className="flex flex-wrap gap-1">
-        {agent.capabilities.map(cap => (
-          <span
-            key={cap}
-            className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wide ${CAPABILITY_COLORS[cap] ?? 'bg-gray-500/20 text-gray-300 border-gray-500/30'}`}
-          >
-            {cap}
-          </span>
-        ))}
-      </div>
-    </button>
-  );
-}
-
 export default function CrewSelector({ selected, onChange, singleSelect = false }: CrewSelectorProps) {
   const [filter, setFilter] = useState('');
   const crew = Object.values(CREW);
@@ -137,45 +53,105 @@ export default function CrewSelector({ selected, onChange, singleSelect = false 
   }
 
   return (
-    <div>
-      <div className="flex gap-2 mb-4">
-        <input
-          value={filter}
-          onChange={e => setFilter(e.target.value)}
-          placeholder="Filter by name, role, or capability..."
-          className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-crew-green/40"
-        />
-        <button
-          onClick={() => autoSelect(filter)}
-          className="px-3 py-2 text-xs font-bold rounded-lg border border-crew-green/30 text-crew-green hover:bg-crew-green/10 transition-colors"
-        >
-          AUTO-SELECT
-        </button>
-        {selected.length > 0 && (
+    <div className="border-2 border-black bg-white">
+      {/* Filter Header */}
+      <div className="grid grid-cols-12 border-b-2 border-black">
+        <div className="col-span-12 md:col-span-8 border-b-2 md:border-b-0 md:border-r-2 border-black">
+          <input
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+            placeholder="SEARCH CREW BY ROLE / CAPABILITY..."
+            className="w-full p-6 text-2xl font-black uppercase tracking-tighter text-black placeholder-zinc-200 focus:outline-none"
+          />
+        </div>
+        <div className="col-span-12 md:col-span-4 flex divide-x-2 divide-black">
           <button
-            onClick={() => onChange([])}
-            className="px-3 py-2 text-xs font-bold rounded-lg border border-white/10 text-gray-400 hover:bg-white/5 transition-colors"
+            onClick={() => autoSelect(filter)}
+            className="flex-1 p-4 font-black uppercase tracking-[0.2em] text-[10px] hover:bg-black hover:text-white transition-all"
           >
-            CLEAR
+            Auto-Select
           </button>
-        )}
+          {selected.length > 0 && (
+            <button
+              onClick={() => onChange([])}
+              className="flex-1 p-4 font-black uppercase tracking-[0.2em] text-[10px] bg-black text-white hover:bg-red-600 transition-all"
+            >
+              Reset
+            </button>
+          )}
+        </div>
       </div>
 
+      {/* Selection Status */}
       {selected.length > 0 && (
-        <div className="mb-3 text-xs text-crew-green font-mono">
-          {selected.length} crew member{selected.length !== 1 ? 's' : ''} selected:{' '}
-          {selected.map(h => CREW[h]?.emoji + ' ' + CREW[h]?.displayName).join(', ')}
+        <div className="bg-zinc-50 border-b-2 border-black p-4">
+          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-red-600 mb-1">
+            00 / Deployment Status
+          </div>
+          <div className="text-xs font-bold uppercase tracking-tight text-black">
+            {selected.length} Agents active: {selected.map(h => CREW[h]?.displayName).join(' + ')}
+          </div>
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+      {/* Agent Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 border-b-0">
         {filtered.map(agent => (
-          <AgentCard
+          <button
             key={agent.handle}
-            agent={agent}
-            isSelected={selected.includes(agent.handle)}
-            onToggle={() => toggle(agent.handle)}
-          />
+            onClick={() => toggle(agent.handle)}
+            className={[
+              'group relative flex flex-col p-8 text-left border-r-2 border-b-2 border-black transition-all',
+              selected.includes(agent.handle)
+                ? 'bg-red-600 text-white border-red-600 z-10'
+                : 'bg-white text-black hover:bg-zinc-50'
+            ].join(' ')}
+          >
+            <div className="flex justify-between items-start mb-8">
+              <span className="text-5xl">{agent.emoji}</span>
+              <div className="text-right">
+                <span className={['text-[9px] font-black uppercase tracking-[0.2em]', selected.includes(agent.handle) ? 'text-white/70' : 'text-red-500'].join(' ')}>
+                  01 / TIER
+                </span>
+                <div className="text-sm font-black uppercase tracking-tighter">{agent.preferredTier}</div>
+              </div>
+            </div>
+
+            <div className="mb-8">
+              <h3 className="text-3xl font-black uppercase tracking-tighter leading-none mb-2">
+                {agent.displayName}
+              </h3>
+              <div className={['text-[10px] font-bold uppercase tracking-widest', selected.includes(agent.handle) ? 'text-white' : 'text-zinc-400'].join(' ')}>
+                {agent.dddRole}
+              </div>
+            </div>
+
+            <p className={['text-xs font-medium leading-tight mb-8 line-clamp-3', selected.includes(agent.handle) ? 'text-white/90' : 'text-zinc-600'].join(' ')}>
+              {agent.role}
+            </p>
+
+            <div className="mt-auto pt-8 border-t border-current opacity-30">
+              <div className="text-[9px] font-black uppercase tracking-[0.2em] mb-4">
+                02 / Capabilities
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {agent.capabilities.map(cap => (
+                  <span
+                    key={cap}
+                    className="text-[9px] font-black uppercase tracking-widest border border-current px-2 py-1"
+                  >
+                    {cap}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {selected.includes(agent.handle) && (
+              <div className="absolute top-4 left-4 bg-white text-red-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest">
+                Selected
+              </div>
+            )}
+          </button>
         ))}
       </div>
     </div>

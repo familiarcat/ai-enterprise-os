@@ -226,8 +226,12 @@ export default function MissionControl() {
       </header>
 
       <main className="max-w-[1600px] mx-auto px-8 py-12">
+        {/* Global Statistics / Economics */}
+        <div className="mb-12 border-2 border-black">
+          <Billing />
+        </div>
+
         {/* Step indicator */}
-<Billing />
         <div className="grid grid-cols-4 gap-0 mb-12 border-2 border-black">
           {STEPS.map((s, idx) => {
             const isDone    = step > s.id;
@@ -338,7 +342,7 @@ export default function MissionControl() {
           {' / '}Star Trek crew via OpenRouter
         </div>
       </main>
-      
+
     </div>
   );
 }

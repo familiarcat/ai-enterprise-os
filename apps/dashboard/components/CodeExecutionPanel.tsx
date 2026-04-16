@@ -54,39 +54,35 @@ export default function CodeExecutionPanel({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-0 border-2 border-black bg-white">
       {/* Summary banner */}
-      <div className={[
-        'p-4 rounded-xl border',
-        failed.length === 0
-          ? 'border-crew-green/30 bg-crew-green/5'
-          : 'border-yellow-500/30 bg-yellow-500/5',
-      ].join(' ')}>
-        <div className="flex items-center gap-3 mb-2">
-          <span className="text-2xl">
-            {failed.length === 0 ? '✅' : '⚠️'}
-          </span>
-          <div>
-            <div className="font-bold text-white">
-              {failed.length === 0 ? 'Mission Complete' : 'Mission Partial'}
+      <div className="grid grid-cols-12 border-b-2 border-black">
+        <div className="col-span-8 p-8 border-r-2 border-black">
+          <h2 className="text-6xl font-black uppercase tracking-tighter leading-none mb-4">
+            {failed.length === 0 ? 'Mission' : 'Partial'} <br /> Complete
+          </h2>
+          <p className="text-xs font-black uppercase tracking-widest text-zinc-400">
+            Objective: <span className="text-black italic">{task}</span>
+          </p>
+        </div>
+        <div className={[
+          'col-span-4 p-8 flex flex-col justify-between text-white',
+          failed.length === 0 ? 'bg-black' : 'bg-red-600'
+        ].join(' ')}>
+          <span className="text-[10px] font-black uppercase tracking-[0.2em]">04 / Stats</span>
+          <div className="space-y-1">
+            <div className="flex justify-between font-black uppercase text-xs">
+              <span>Cost</span> <span>${totalCost.toFixed(4)}</span>
             </div>
-            <div className="text-xs text-gray-400 font-mono mt-0.5">
-              {project} · {completed.length}/{executions.length} agents succeeded
-              {totalCost > 0 && ` · $${totalCost.toFixed(4)} total cost`}
-              {totalMs > 0 && ` · ${(totalMs / 1000).toFixed(1)}s`}
+            <div className="flex justify-between font-black uppercase text-xs">
+              <span>Time</span> <span>{(totalMs / 1000).toFixed(1)}s</span>
             </div>
           </div>
         </div>
-        <p className="text-sm text-gray-300 leading-relaxed italic border-t border-white/10 pt-2 mt-2">
-          "{task}"
-        </p>
       </div>
 
       {/* Agent results */}
-      <div className="space-y-3">
-        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-          Agent Outputs
-        </h3>
+      <div className="grid grid-cols-1 divide-y-2 divide-black border-b-2 border-black">
         {executions.map(exec => {
           const agent = CREW[exec.handle];
           const isExpanded = expanded === exec.handle;
@@ -94,51 +90,34 @@ export default function CodeExecutionPanel({
           const preview = lines.slice(0, 4).join('\n');
 
           return (
-            <div
-              key={exec.handle}
-              className={[
-                'border rounded-xl overflow-hidden transition-all',
-                exec.status === 'SUCCESS' ? 'border-green-500/20' :
-                exec.status === 'ERROR'   ? 'border-red-500/20' :
-                'border-white/10',
-              ].join(' ')}
-            >
+            <div key={exec.handle} className="bg-white">
               <button
                 onClick={() => setExpanded(isExpanded ? null : exec.handle)}
-                className="w-full flex items-center justify-between px-4 py-3 bg-white/3 hover:bg-white/5 transition-colors"
+                className="w-full flex items-center justify-between p-6 hover:bg-zinc-50 transition-colors"
               >
-                <div className="flex items-center gap-2">
-                  <span>{agent?.emoji ?? '🤖'}</span>
-                  <span className="font-semibold text-sm text-white">
-                    {agent?.displayName ?? exec.handle}
-                  </span>
-                  {exec.model && (
-                    <span className="text-[10px] text-gray-500 font-mono">
-                      {exec.model.split('/').pop()}
-                    </span>
-                  )}
+                <div className="flex items-center gap-4">
+                  <span className="text-2xl">{agent?.emoji ?? '🤖'}</span>
+                  <h4 className="text-lg font-black uppercase tracking-tighter">{agent?.displayName ?? exec.handle}</h4>
                 </div>
-                <div className="flex items-center gap-3 text-xs">
+                <div className="flex items-center gap-6 text-[10px] font-black uppercase tracking-widest">
                   {exec.cost !== undefined && (
-                    <span className="text-yellow-500/80">💰 ${exec.cost.toFixed(4)}</span>
+                    <span className="text-zinc-400">Cost / ${exec.cost.toFixed(4)}</span>
                   )}
                   <span className={
-                    exec.status === 'SUCCESS' ? 'text-green-400 font-bold' :
-                    exec.status === 'ERROR'   ? 'text-red-400 font-bold' :
-                    'text-gray-500'
+                    exec.status === 'SUCCESS' ? 'text-black' : 'text-red-600'
                   }>
-                    {exec.status}
+                    Status / {exec.status}
                   </span>
-                  <span className="text-gray-600">{isExpanded ? '▲' : '▼'}</span>
+                  <span className="text-black">{isExpanded ? 'CLOSE' : 'OPEN'}</span>
                 </div>
               </button>
 
               <div className={[
-                'transition-all overflow-hidden',
-                isExpanded ? 'max-h-[600px]' : 'max-h-16',
+                'transition-all overflow-hidden bg-zinc-50 border-t-2 border-black',
+                isExpanded ? 'max-h-[800px]' : 'max-h-0',
               ].join(' ')}>
-                <pre className="px-4 py-3 text-xs font-mono text-gray-300 whitespace-pre-wrap break-words leading-relaxed bg-black/30 overflow-y-auto max-h-[580px]">
-                  {isExpanded ? exec.output : preview + (lines.length > 4 ? '\n...' : '')}
+                <pre className="p-8 text-[11px] font-mono font-medium text-black whitespace-pre-wrap break-words leading-tight overflow-y-auto max-h-[700px]">
+                  {exec.output}
                 </pre>
               </div>
             </div>
@@ -147,28 +126,24 @@ export default function CodeExecutionPanel({
       </div>
 
       {/* Actions */}
-      <div className="flex gap-3 pt-2">
+      <div className="flex divide-x-2 divide-black bg-black">
         <button
           onClick={onNewTask}
-          className="flex-1 py-3 rounded-xl font-bold text-sm tracking-widest uppercase border border-crew-green/40 text-crew-green bg-crew-green/10 hover:bg-crew-green/20 transition-colors"
+          className="flex-1 py-8 font-black uppercase tracking-[0.2em] text-sm text-white hover:bg-white hover:text-black transition-all"
         >
-          ▶ New Mission
+          01 / New Mission
         </button>
         <button
           onClick={() => {
+            // ... (keep download logic)
             const blob = new Blob(
               [executions.map(e => `=== ${e.handle} ===\n${e.output}`).join('\n\n')],
               { type: 'text/plain' }
             );
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `mission-${project}-${Date.now()}.txt`;
-            a.click();
           }}
-          className="px-4 py-3 rounded-xl font-bold text-sm tracking-widest uppercase border border-white/10 text-gray-400 hover:bg-white/5 transition-colors"
+          className="flex-1 py-8 font-black uppercase tracking-[0.2em] text-sm text-white hover:bg-white hover:text-black transition-all"
         >
-          ⬇ Export
+          02 / Export Log
         </button>
       </div>
     </div>

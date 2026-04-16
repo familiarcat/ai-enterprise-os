@@ -52,26 +52,26 @@ export default function SovereignAgentViewport({
 
   return (
     <div className={[
-      'relative flex flex-col h-full border-2 rounded-none overflow-hidden transition-all duration-300 font-sans selection:bg-red-500 selection:text-white bg-white',
+      'relative flex flex-col h-full border-2 border-black rounded-none overflow-hidden transition-all duration-300 font-sans selection:bg-red-500 selection:text-white bg-white',
       isActive
-        ? 'border-red-600 shadow-[4px_4px_0px_0px_rgba(220,38,38,1)]'
+        ? 'border-red-600 shadow-[8px_8px_0px_0px_rgba(220,38,38,1)] z-10'
         : 'border-black',
     ].join(' ')}>
 
       {/* Header Grid: Consistent with Billing.tsx 12-column logic */}
-      <div className="grid grid-cols-12 border-b-2 border-black bg-white">
-        <div className="col-span-8 p-3 border-r-2 border-black flex items-center gap-3">
-          <span className={`text-xl ${cfg.animate}`}>{emoji}</span>
-          <h2 className="text-xl font-black uppercase tracking-tighter leading-none truncate">
+      <div className="grid grid-cols-12 border-b-2 border-black bg-white min-h-[80px]">
+        <div className="col-span-9 p-4 border-r-2 border-black flex items-center gap-4">
+          <span className={`text-3xl ${cfg.animate}`}>{emoji}</span>
+          <h2 className="text-2xl font-black uppercase tracking-tighter leading-none truncate">
             {agentName}
           </h2>
         </div>
         <div className={[
-          'col-span-4 p-3 flex flex-col justify-center items-end transition-colors',
+          'col-span-3 p-4 flex flex-col justify-center items-end transition-colors',
           isAlert ? 'bg-red-600 text-white' : status === 'THINKING' ? 'bg-black text-white' : 'bg-white text-black'
         ].join(' ')}>
-          <span className={['text-[10px] font-bold uppercase tracking-widest', isAlert ? 'text-white/80' : 'text-red-500'].join(' ')}>
-            Status
+          <span className={['text-[9px] font-bold uppercase tracking-[0.2em] mb-1', isAlert ? 'text-white/70' : 'text-red-500'].join(' ')}>
+            00 / STATE
           </span>
           <span className="text-xs font-black uppercase tracking-tighter">
             {status}
@@ -80,18 +80,18 @@ export default function SovereignAgentViewport({
       </div>
 
       {/* Metadata Strip */}
-      <div className="grid grid-cols-12 border-b-2 border-black text-[9px] font-bold uppercase tracking-widest bg-white">
-        <div className="col-span-4 p-2 border-r-2 border-black">
-          <span className="text-zinc-400 block mb-0.5">01 / ID</span>
-          <span className="font-mono text-black truncate block">{agentId}</span>
+      <div className="grid grid-cols-12 border-b-2 border-black text-[10px] font-bold uppercase tracking-widest bg-white">
+        <div className="col-span-4 p-4 border-r-2 border-black">
+          <span className="text-red-500 block mb-1">01 / ID</span>
+          <span className="font-black text-black truncate block">{agentId}</span>
         </div>
-        <div className="col-span-4 p-2 border-r-2 border-black">
-          <span className="text-zinc-400 block mb-0.5">02 / Model</span>
-          <span className="text-black truncate block">{metadata?.model?.split('/').pop() || 'None'}</span>
+        <div className="col-span-4 p-4 border-r-2 border-black">
+          <span className="text-red-500 block mb-1">02 / MODEL</span>
+          <span className="text-black truncate block font-black">{metadata?.model?.split('/').pop() || 'None'}</span>
         </div>
-        <div className="col-span-4 p-2">
-          <span className="text-zinc-400 block mb-0.5">03 / Resource</span>
-          <span className="text-black block">
+        <div className="col-span-4 p-4">
+          <span className="text-red-500 block mb-1">03 / COST</span>
+          <span className="text-black block font-black">
             {metadata?.cost !== undefined ? `$${metadata.cost.toFixed(4)}` : 'N/A'}
           </span>
         </div>
@@ -99,15 +99,15 @@ export default function SovereignAgentViewport({
 
       {/* Stream content */}
       <div 
-        className="flex-1 p-4 overflow-y-auto bg-white min-h-[120px] scrollbar-thin scrollbar-thumb-black scrollbar-track-transparent"
-        style={{ scrollbarWidth: 'thin', scrollbarColor: 'black transparent' }}
+        className="flex-1 p-6 overflow-y-auto bg-white min-h-[150px] scrollbar-thin scrollbar-thumb-black scrollbar-track-zinc-100"
+        style={{ scrollbarWidth: 'auto', scrollbarColor: 'black transparent' }}
       >
         {streamContent ? (
-          <pre className="text-xs font-mono text-black whitespace-pre-wrap break-words leading-tight">
+          <pre className="text-[11px] font-mono font-medium text-black whitespace-pre-wrap break-words leading-[1.4] selection:bg-black selection:text-white">
             {streamContent}
           </pre>
         ) : (
-          <div className="text-sm text-zinc-300 italic font-mono uppercase tracking-tight">
+          <div className="text-sm text-zinc-200 italic font-black uppercase tracking-tighter">
             {status === 'IDLE' ? 'Awaiting task...' : 'Initializing...'}
           </div>
         )}
@@ -115,13 +115,13 @@ export default function SovereignAgentViewport({
 
       {/* Execution Time Accent */}
       {metadata?.executionTimeMs !== undefined && (
-        <div className="absolute bottom-4 right-4 bg-black text-white px-2 py-1 text-[10px] font-black uppercase tracking-widest">
+        <div className="absolute bottom-6 right-6 bg-black text-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest">
           {metadata.executionTimeMs}ms
         </div>
       )}
 
       {cached && (
-        <div className="absolute bottom-4 right-4 bg-red-600 text-white px-2 py-1 text-[10px] font-black uppercase tracking-widest">
+        <div className="absolute bottom-6 right-6 bg-red-600 text-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest">
           CACHED
         </div>
       )}

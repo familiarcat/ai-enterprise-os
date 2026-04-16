@@ -68,34 +68,34 @@ export default function ObservationLounge({ executions, sessionTitle }: Observat
   const totalCost    = executions.reduce((acc, e) => acc + (e.cost ?? 0), 0);
 
   return (
-    <div>
+    <div className="bg-white text-black font-sans">
       {/* Session header */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h3 className="text-base font-semibold text-white">
-            {sessionTitle ?? 'Observation Lounge'}
-          </h3>
-          <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
-            {activeCount > 0  && <span className="text-blue-400">⏳ {activeCount} running</span>}
-            {successCount > 0 && <span className="text-green-400">✓ {successCount} complete</span>}
-            {errorCount > 0   && <span className="text-red-400">✗ {errorCount} errors</span>}
-            {totalCost > 0    && <span className="text-yellow-500">💰 ${totalCost.toFixed(4)} total</span>}
+      <div className="grid grid-cols-12 border-b-2 border-black mb-12">
+        <div className="col-span-8 p-8 border-r-2 border-black">
+          <h1 className="text-6xl font-black uppercase tracking-tighter leading-none mb-4">
+            Observation <br /> Lounge
+          </h1>
+          <div className="flex items-center gap-6 text-[10px] font-black uppercase tracking-widest text-zinc-400">
+            {activeCount > 0  && <span className="text-black">01 / {activeCount} running</span>}
+            {successCount > 0 && <span className="text-black">02 / {successCount} success</span>}
+            {errorCount > 0   && <span className="text-red-600">03 / {errorCount} alerts</span>}
+            {totalCost > 0    && <span className="text-black">04 / ${totalCost.toFixed(4)} cost</span>}
           </div>
         </div>
 
-        <div className="flex gap-1 border border-white/10 rounded-lg overflow-hidden text-xs">
+        <div className="col-span-4 p-8 flex flex-col justify-end gap-2 bg-black">
           {(['live', 'history'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={[
-                'px-3 py-1.5 font-bold uppercase tracking-wide transition-colors',
+                'px-6 py-3 font-black uppercase tracking-[0.2em] text-xs border-2 transition-all text-left',
                 activeTab === tab
-                  ? 'bg-crew-green/20 text-crew-green'
-                  : 'bg-transparent text-gray-500 hover:text-gray-300',
+                  ? 'bg-white text-black border-white'
+                  : 'bg-transparent text-white border-zinc-800 hover:border-white',
               ].join(' ')}
             >
-              {tab === 'live' ? '▶ Live' : '📚 History'}
+              {tab === 'live' ? '01 / Live Stream' : '02 / Historical'}
             </button>
           ))}
         </div>
@@ -105,22 +105,21 @@ export default function ObservationLounge({ executions, sessionTitle }: Observat
       {activeTab === 'live' && (
         <>
           {executions.length === 0 ? (
-            <div className="flex items-center justify-center h-48 border border-white/5 rounded-xl bg-black/10">
-              <p className="text-sm text-gray-600 font-mono italic">
+            <div className="flex items-center justify-center h-64 border-2 border-black bg-zinc-50">
+              <p className="text-xs font-black uppercase tracking-widest text-zinc-300">
                 No active executions — run a task to see agent output here
               </p>
             </div>
           ) : (
             <div className={[
-              'grid gap-4',
+              'grid gap-8',
               executions.length === 1 ? 'grid-cols-1' :
-              executions.length === 2 ? 'grid-cols-2' :
-              'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3',
+              'grid-cols-1 lg:grid-cols-2',
             ].join(' ')}>
               {executions.map(exec => {
                 const agent = CREW[exec.handle];
                 return (
-                  <div key={exec.handle} className="h-64">
+                  <div key={exec.handle} className="h-[400px]">
                     <SovereignAgentViewport
                       agentName={agent?.displayName ?? exec.handle}
                       agentId={exec.handle}
@@ -145,49 +144,58 @@ export default function ObservationLounge({ executions, sessionTitle }: Observat
 
       {/* History panel */}
       {activeTab === 'history' && (
-        <div>
+        <div className="bg-white">
           {loadingObs ? (
-            <div className="flex items-center justify-center h-32">
-              <span className="text-gray-500 text-sm font-mono animate-pulse">Loading crew memories...</span>
+            <div className="flex items-center justify-center h-64 border-2 border-black">
+              <span className="text-xs font-black uppercase tracking-[0.2em] animate-pulse">00 / Loading Memories...</span>
             </div>
           ) : observations.length === 0 ? (
-            <div className="flex items-center justify-center h-32 border border-white/5 rounded-xl bg-black/10">
-              <p className="text-sm text-gray-600 font-mono italic">
+            <div className="flex items-center justify-center h-64 border-2 border-black bg-zinc-50">
+              <p className="text-xs font-black uppercase tracking-widest text-zinc-300">
                 No crew observations found in crew-memories/active/
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-0 border-t-2 border-l-2 border-black">
               {observations.map((obs, i) => {
                 const agent = Object.values(CREW).find(a =>
                   a.displayName.toLowerCase().includes(obs.crew_member.toLowerCase().split(' ')[0])
                 );
                 return (
-                  <div key={i} className="p-4 border border-white/10 rounded-xl bg-black/20">
-                    <div className="flex items-center gap-3 mb-3">
-                      <span className="text-xl">{agent?.emoji ?? '⭐'}</span>
-                      <div>
-                        <div className="font-semibold text-white text-sm">{obs.crew_member}</div>
-                        <div className="text-xs text-gray-500">{obs.role} · {new Date(obs.timestamp).toLocaleDateString()}</div>
+                  <div key={i} className="p-8 border-r-2 border-b-2 border-black bg-white transition-colors hover:bg-zinc-50">
+                    <div className="flex items-start justify-between mb-8">
+                      <div className="flex items-center gap-4">
+                        <span className="text-4xl">{agent?.emoji ?? '⭐'}</span>
+                        <div>
+                          <div className="font-black uppercase tracking-tighter text-2xl leading-none">{obs.crew_member}</div>
+                          <div className="text-[10px] font-bold uppercase tracking-widest text-red-600 mt-1">{obs.role}</div>
+                        </div>
+                      </div>
+                      <div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
+                        {new Date(obs.timestamp).toLocaleDateString()}
                       </div>
                     </div>
-                    <p className="text-sm text-gray-300 leading-relaxed mb-3">{obs.summary}</p>
+                    <p className="text-lg font-medium leading-tight tracking-tight text-black mb-8">{obs.summary}</p>
                     {obs.key_findings?.length > 0 && (
-                      <div className="mb-2">
-                        <div className="text-xs font-bold text-crew-green mb-1 uppercase tracking-wide">Key Findings</div>
-                        <ul className="list-disc list-inside space-y-1">
+                      <div className="mb-6">
+                        <div className="text-[9px] font-black text-zinc-400 mb-2 uppercase tracking-[0.2em]">01 / Key Findings</div>
+                        <ul className="space-y-1">
                           {obs.key_findings.slice(0, 3).map((f, j) => (
-                            <li key={j} className="text-xs text-gray-400">{f}</li>
+                            <li key={j} className="text-xs font-bold uppercase tracking-tight flex items-start gap-2">
+                              <span className="text-red-600">▪</span> {f}
+                            </li>
                           ))}
                         </ul>
                       </div>
                     )}
                     {obs.recommendations?.length > 0 && (
                       <div>
-                        <div className="text-xs font-bold text-yellow-500/80 mb-1 uppercase tracking-wide">Recommendations</div>
-                        <ul className="list-disc list-inside space-y-1">
+                        <div className="text-[9px] font-black text-zinc-400 mb-2 uppercase tracking-[0.2em]">02 / Recommendations</div>
+                        <ul className="space-y-1">
                           {obs.recommendations.slice(0, 2).map((r, j) => (
-                            <li key={j} className="text-xs text-gray-400">{r}</li>
+                            <li key={j} className="text-xs font-bold uppercase tracking-tight flex items-start gap-2">
+                              <span className="text-black">▪</span> {r}
+                            </li>
                           ))}
                         </ul>
                       </div>

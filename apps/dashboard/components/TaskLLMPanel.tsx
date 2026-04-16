@@ -68,63 +68,61 @@ export default function TaskLLMPanel({ selectedCrew, onExecute, isLoading }: Tas
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-0 border-2 border-black bg-white">
       {/* Task input */}
-      <div>
-        <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
-          Task / Objective
+      <div className="border-b-2 border-black">
+        <label className="block text-[10px] font-black text-red-600 uppercase tracking-[0.2em] p-4 pb-0">
+          01 / Task Objective
         </label>
         <textarea
           value={task}
           onChange={e => setTask(e.target.value)}
           rows={4}
-          placeholder="Describe what you want the crew to accomplish...
-e.g. Scaffold a new DDD domain for subscription billing with Stripe integration"
-          className="w-full bg-black/30 border border-white/10 rounded-lg px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-crew-green/40 resize-none leading-relaxed font-mono"
+          placeholder="DESCRIBE MISSION OBJECTIVE..."
+          className="w-full bg-white px-4 py-4 text-2xl font-black uppercase tracking-tighter text-black placeholder-zinc-200 focus:outline-none resize-none leading-none"
         />
       </div>
 
       {/* Project + complexity row */}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
-            Project
+      <div className="grid grid-cols-12 border-b-2 border-black">
+        <div className="col-span-8 border-r-2 border-black p-4">
+          <label className="block text-[10px] font-black text-red-600 uppercase tracking-[0.2em] mb-2">
+            02 / Project Reference
           </label>
           <input
             value={project}
             onChange={e => setProject(e.target.value)}
             placeholder="project-name"
-            className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-crew-green/40 font-mono"
+            className="w-full bg-white text-xl font-black uppercase tracking-tighter text-black focus:outline-none"
           />
         </div>
-        <div>
-          <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
-            Complexity
+        <div className="col-span-4 p-4 flex flex-col justify-center">
+          <label className="block text-[10px] font-black text-red-600 uppercase tracking-[0.2em] mb-1">
+            03 / Complexity
           </label>
-          <div className="bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono">
-            <span className="text-white">{COMPLEXITY_LABEL(complexity)}</span>
-            <span className="text-gray-600 ml-2">{(complexity * 100).toFixed(0)}%</span>
+          <div className="text-lg font-black uppercase tracking-tighter">
+            {COMPLEXITY_LABEL(complexity)}
           </div>
         </div>
       </div>
 
       {/* Model tier selection */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-            Model Tier
+      <div className="border-b-2 border-black">
+        <div className="flex items-center justify-between p-4 border-b-2 border-black">
+          <label className="text-[10px] font-black text-red-600 uppercase tracking-[0.2em]">
+            04 / Model Architecture
           </label>
-          <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
+          <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest cursor-pointer">
             <input
               type="checkbox"
               checked={overrideTier}
               onChange={e => setOverrideTier(e.target.checked)}
-              className="rounded"
+              className="rounded-none border-2 border-black accent-black"
             />
-            Manual override
+            Override
           </label>
         </div>
-        <div className="grid grid-cols-5 gap-2">
+        <div className="grid grid-cols-5 divide-x-2 divide-black">
           {tiers.map(t => {
             const costLbl = MODEL_COST_LABEL[t];
             const modelId = MODEL_ID_MAP[t].split('/').pop();
@@ -135,32 +133,29 @@ e.g. Scaffold a new DDD domain for subscription billing with Stripe integration"
                 onClick={() => { setOverrideTier(true); setTier(t); }}
                 disabled={!overrideTier && tier !== t}
                 className={[
-                  'flex flex-col items-center p-2 rounded-lg border text-center transition-all',
+                  'flex flex-col items-center p-4 text-center transition-all',
                   isActive
-                    ? 'border-crew-green/60 bg-crew-green/5 text-crew-green'
-                    : 'border-white/10 bg-black/20 text-gray-500 hover:border-white/20',
-                  !overrideTier && !isActive ? 'opacity-40 cursor-default' : 'cursor-pointer',
+                    ? 'bg-black text-white'
+                    : 'bg-white text-zinc-300 hover:text-black',
+                  !overrideTier && !isActive ? 'opacity-20 cursor-default' : 'cursor-pointer',
                 ].join(' ')}
               >
-                <span className="text-[10px] font-bold">{t}</span>
-                <span className="text-[9px] mt-0.5 font-mono truncate w-full">{modelId}</span>
-                <span className="text-[9px] text-yellow-500/70 mt-0.5">{costLbl}</span>
+                <span className="text-xs font-black tracking-widest">{t}</span>
+                <span className="text-[9px] mt-1 font-bold truncate w-full opacity-60 uppercase">{modelId}</span>
               </button>
             );
           })}
         </div>
-        <p className="mt-2 text-[11px] text-gray-600 font-mono">
-          Selected: <span className="text-gray-400">{model}</span>
-          {!overrideTier && <span className="text-gray-600 ml-2">(auto-selected from task complexity)</span>}
-        </p>
       </div>
 
-      {/* Agent selector for this task */}
-      <div>
-        <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
-          Primary Agent
-        </label>
-        <div className="grid grid-cols-5 gap-2">
+      {/* Agent selector */}
+      <div className="border-b-2 border-black">
+        <div className="p-4 border-b-2 border-black">
+          <label className="text-[10px] font-black text-red-600 uppercase tracking-[0.2em]">
+            05 / Deployment Handle
+          </label>
+        </div>
+        <div className="grid grid-cols-5 divide-x-2 divide-black border-b-2 border-black bg-zinc-50">
           {(selectedCrew.length > 0 ? selectedCrew : Object.keys(CREW)).slice(0, 10).map(handle => {
             const a = CREW[handle];
             if (!a) return null;
@@ -169,60 +164,52 @@ e.g. Scaffold a new DDD domain for subscription billing with Stripe integration"
                 key={handle}
                 onClick={() => setCrewHandle(handle)}
                 className={[
-                  'flex flex-col items-center py-2 px-1 rounded-lg border text-center transition-all',
+                  'flex flex-col items-center py-4 text-center transition-all',
                   crewHandle === handle
-                    ? 'border-crew-green/60 bg-crew-green/5'
-                    : 'border-white/10 bg-black/20 hover:border-white/20',
+                    ? 'bg-red-600 text-white'
+                    : 'bg-transparent text-zinc-400 hover:text-black',
                 ].join(' ')}
               >
-                <span className="text-lg">{a.emoji}</span>
-                <span className="text-[9px] text-gray-400 mt-1 font-semibold leading-tight">
+                <span className="text-2xl">{a.emoji}</span>
+                <span className="text-[9px] font-black uppercase tracking-widest mt-1">
                   {a.displayName.split(' ').pop()}
                 </span>
               </button>
             );
           })}
         </div>
-        {agent && (
-          <p className="mt-2 text-[11px] text-gray-600">
-            <span className="text-gray-400">{agent.emoji} {agent.displayName}</span>
-            {' — '}
-            <span>{agent.role.split('—')[0].trim()}</span>
-          </p>
-        )}
       </div>
 
       {/* Full mission flow toggle */}
-      <div className="flex items-start gap-3 p-3 rounded-lg border border-white/5 bg-black/20">
-        <input
-          type="checkbox"
-          id="fullflow"
-          checked={runFullFlow}
-          onChange={e => setRunFullFlow(e.target.checked)}
-          className="mt-0.5"
-        />
-        <label htmlFor="fullflow" className="cursor-pointer">
-          <div className="text-sm text-white font-semibold">Run Full Mission Flow</div>
-          <div className="text-xs text-gray-500 mt-0.5">
-            Picard → Troi → Data → Crusher → Quark → Worf → Riker → Uhura
-            ({MISSION_FLOW.length} agents, cost-optimized per step)
-          </div>
-        </label>
+      <div className="p-6 bg-black text-white flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <input
+            type="checkbox"
+            id="fullflow"
+            checked={runFullFlow}
+            onChange={e => setRunFullFlow(e.target.checked)}
+            className="w-6 h-6 rounded-none border-2 border-white bg-transparent accent-red-600"
+          />
+          <label htmlFor="fullflow" className="cursor-pointer">
+            <div className="text-xl font-black uppercase tracking-tighter">Canonical Mission Flow</div>
+            <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mt-1">
+              Sequential Multi-Agent Execution (8 Stages)
+            </div>
+          </label>
+        </div>
+        <button
+          onClick={handleExecute}
+          disabled={!task.trim() || isLoading}
+          className={[
+            'px-12 py-4 font-black uppercase tracking-[0.2em] text-sm transition-all border-2',
+            task.trim() && !isLoading
+              ? 'bg-red-600 border-red-600 text-white hover:bg-white hover:text-black'
+              : 'bg-zinc-800 border-zinc-800 text-zinc-500 cursor-not-allowed',
+          ].join(' ')}
+        >
+          {isLoading ? 'EXECUTING...' : 'INITIATE MISSION'}
+        </button>
       </div>
-
-      {/* Execute button */}
-      <button
-        onClick={handleExecute}
-        disabled={!task.trim() || isLoading}
-        className={[
-          'w-full py-3 rounded-xl font-bold text-sm tracking-widest uppercase transition-all',
-          task.trim() && !isLoading
-            ? 'bg-crew-green/20 border border-crew-green/50 text-crew-green hover:bg-crew-green/30 shadow-[0_0_16px_rgba(0,255,170,0.15)]'
-            : 'bg-white/5 border border-white/10 text-gray-600 cursor-not-allowed',
-        ].join(' ')}
-      >
-        {isLoading ? '⏳ Executing...' : `▶ Execute — ${agent?.emoji ?? ''} ${agent?.displayName ?? crewHandle}`}
-      </button>
     </div>
   );
 }
