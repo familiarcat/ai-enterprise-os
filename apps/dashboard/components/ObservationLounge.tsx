@@ -23,6 +23,7 @@ export interface AgentExecution {
   durationMs?:  number;
   cached?:      boolean;
   producedFiles?: string[];
+  usedTools?:     { name: string; isSecure: boolean }[];
 }
 
 interface ObservationLoungeProps {

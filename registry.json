@@ -28,5 +28,17 @@
     "source": "github.com/modelcontextprotocol/servers/fetch",
     "capabilities": ["http_get", "http_post"],
     "tier": "Standard"
+  },
+  {
+    "name": "Brave Search MCP",
+    "source": "github.com/modelcontextprotocol/servers/brave-search",
+    "capabilities": ["brave_web_search", "brave_local_search"],
+    "tier": "Strategic"
+  },
+  {
+    "name": "Filesystem MCP",
+    "source": "github.com/modelcontextprotocol/servers/filesystem",
+    "capabilities": ["read_file", "write_file", "list_directory"],
+    "tier": "Standard"
   }
 ]

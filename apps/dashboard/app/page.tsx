@@ -133,12 +133,11 @@ export default function MissionControl() {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify({
-            tool: 'run_crew_agent',
+            tool: 'run_factory_mission',
             args: {
               project:   cfg.project,
-              objective: cfg.task,
+              objective: `${step.description}: ${cfg.task}`,
               persona:   handle,
-              step:      step.description,
             },
           }),
         });

@@ -25,6 +25,7 @@ export interface AgentViewportProps {
     cost?:            number;
     executionTimeMs?: number;
     producedFiles?:   string[];
+    usedTools?:       { name: string; isSecure: boolean }[];
   };
   cached?:   boolean;
   isActive?: boolean;
@@ -97,6 +98,24 @@ export default function SovereignAgentViewport({
           </span>
         </div>
       </div>
+
+      {/* Tools & Security Stream */}
+      {metadata?.usedTools && metadata.usedTools.length > 0 && (
+        <div className="px-6 py-2 border-b-2 border-black bg-white flex gap-2 overflow-x-auto scrollbar-hide">
+          <span className="text-[9px] font-black uppercase text-black whitespace-nowrap">Security Audit:</span>
+          {metadata.usedTools.map((tool, i) => (
+            <span 
+              key={i} 
+              className={[
+                'text-[9px] font-black uppercase tracking-widest px-2 py-0.5 border-2 whitespace-nowrap',
+                tool.isSecure ? 'border-black bg-white text-black' : 'border-red-600 bg-red-600 text-white'
+              ].join(' ')}
+            >
+              {tool.isSecure ? '✓' : '✗'} {tool.name}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Produced Files Breadcrumbs */}
       {metadata?.producedFiles && metadata.producedFiles.length > 0 && (

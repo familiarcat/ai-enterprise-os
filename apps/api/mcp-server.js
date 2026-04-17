@@ -7,7 +7,7 @@ const { CallToolRequestSchema, ListToolsRequestSchema } = require("@modelcontext
 const { 
   invokeUnzipSearchTool, runMission, runMissions, getVersionsHierarchy, 
   manageProject, manageSprint, manageTask, invokeCrewAgent, gitOperation,
-  verifyIntegrity, listAvailableMCPs
+  verifyIntegrity, listAvailableMCPs, syncMCPRegistry, worfSecurityScan
 } = require("../../core/orchestrator.js");
 
 const server = new Server({
@@ -45,7 +45,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         type: "object",
         properties: {
           project: { type: "string" },
-          objective: { type: "string" }
+          objective: { type: "string" },
+          persona: { type: "string", description: "The crew handle executing the mission (e.g. commander_riker)" }
         },
         required: ["project", "objective"]
       }
@@ -172,6 +173,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         type: "object",
         properties: {}
       }
+    },
+    {
+      name: "sync_mcp_registry",
+      description: "Lt. Uhura's tool to sync the local MCP registry with the remote authority.",
+      inputSchema: {
+        type: "object",
+        properties: {}
+      }
+    },
+    {
+      name: "worf_security_scan",
+      description: "Audit files for secrets, hardcoded keys, and dishonorable patterns.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          files: { type: "array", items: { type: "string" } }
+        },
+        required: ["files"]
+      }
     }
   ]
 }));
@@ -190,7 +210,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (name === "search_code") {
     result = await invokeUnzipSearchTool(args);
   } else if (name === "run_factory_mission") {
-    result = await runMission(args.project, args.objective);
+    result = await runMission(args.project, args.objective, args.persona);
   } else if (name === "run_batch_missions") {
     result = await runMissions(args.missions, args.limit, (info) => {
       server.notification({
@@ -215,7 +235,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   } else if (name === "git_operation") {
     result = await gitOperation(args.project, args.action, args.message);
   } else if (name === "list_available_mcps") {
-    result = await listAvailableMCPs();
+    result = await listAvailableMCPs(args.sync);
+  } else if (name === "sync_mcp_registry") {
+    result = await syncMCPRegistry();
+  } else if (name === "worf_security_scan") {
+    result = await worfSecurityScan(args.files, path.resolve(__dirname, '../..'));
   } else if (name === "health_check") {
     const { spawnSync } = require('child_process');
     const scriptArgs = [path.resolve(__dirname, '../../scripts/verify_health.sh')];

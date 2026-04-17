@@ -122,6 +122,93 @@ describe('Orchestrator Mission Logic', () => {
     expect(result).toHaveProperty('plan');
     expect(result).toHaveProperty('decision');
   });
+describe('Self-Correction Loop', () => {
+    it('should trigger remediation when Worf detects a mock secret', async () => {
+      process.env.OPENROUTER_API_KEY = 'test-key';
+      // Pattern: sk- followed by 48 alphanumeric characters
+      const secretKey = 'sk-' + 'a'.repeat(48); 
+      const objective = 'create new SecureDomain';
+      
+      // track generateComponentContent calls to simulate remediation on second call
+      let generationCount = 0;
+      
+      vi.stubGlobal('fetch', vi.fn((url, options) => {
+        const body = JSON.parse(options.body);
+        
+        // Handle Embeddings (recallMemory)
+        if (url.includes('embeddings')) {
+          return Promise.resolve({
+            json: () => Promise.resolve({ data: [{ embedding: new Array(1536).fill(0.1) }] })
+          });
+        }
+
+        // Handle Auditor call (auditPastMissions)
+        if (body.messages?.[0]?.content.includes('Senior QA Auditor')) {
+          return Promise.resolve({
+            json: () => Promise.resolve({ choices: [{ message: { content: "Audit passed." } }] })
+          });
+        }
+
+        // Handle Critic call (conductObservationLounge)
+        if (body.messages?.[0]?.content.includes('System Critic')) {
+          return Promise.resolve({
+            json: () => Promise.resolve({
+              choices: [{ message: { content: JSON.stringify({ score: 9, weaknesses: [], improvements: [], summary: "Safe" }) } }]
+            })
+          });
+        }
+
+        // Handle Developer calls (generateComponentContent)
+        generationCount++;
+        if (generationCount === 1) {
+          // Return content WITH a secret to trigger worfSecurityScan failure
+          return Promise.resolve({
+            json: () => Promise.resolve({
+              choices: [{
+                message: {
+                  content: JSON.stringify({
+                    domain: `const key = "${secretKey}";`,
+                    application: "// logic", infrastructure: "// repo", ui: "// component"
+                  })
+                }
+              }]
+            })
+          });
+        } else {
+          // Return content WITHOUT a secret (Simulating successful remediation)
+          return Promise.resolve({
+            json: () => Promise.resolve({
+              choices: [{
+                message: {
+                  content: JSON.stringify({
+                    domain: `const key = process.env.API_KEY;`,
+                    application: "// logic", infrastructure: "// repo", ui: "// component"
+                  })
+                }
+              }]
+            })
+          });
+        }
+      }));
+
+      // Use custom file mock implementations to simulate disk write/read
+      const disk = {};
+      fs.writeFileSync.mockImplementation((p, c) => { disk[p] = c; });
+      fs.readFileSync.mockImplementation((p) => disk[p] || "");
+      fs.existsSync.mockReturnValue(true);
+      fs.lstatSync.mockReturnValue({ isFile: () => true });
+
+      await orchestrator.runMission('.', objective);
+
+      // Verify self-correction: should have called developer twice
+      expect(generationCount).toBe(2); 
+      const domainFile = Object.keys(disk).find(p => p.includes('model.js'));
+      expect(disk[domainFile]).not.toContain(secretKey);
+      expect(disk[domainFile]).toContain('process.env.API_KEY');
+    });
+  });
+});
+
 
   describe('recallMemory', () => {
     it('should return past experiences when similar missions are found in Supabase', async () => {
@@ -154,4 +241,3 @@ describe('Orchestrator Mission Logic', () => {
       expect(result).toBe("No specific QA suggestions based on history.");
     });
   });
-});

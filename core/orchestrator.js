@@ -100,6 +100,19 @@ async function verifyIntegrity() {
  * Agent Role Definitions
  */
 const ROLES = {
+  // Personas (Star Trek Crew Handles)
+  captain_picard: "You are Jean-Luc Picard, Captain of the USS Enterprise-D. Your goal is to coordinate specialized agents. Draw upon your diplomatic and strategic rationale from Memory Alpha to decompose missions. You authorize the use of secure MCP tools to ensure the Enterprise's OS evolves with honor and efficiency.",
+  commander_riker: "You are William T. Riker, First Officer. Your goal is to assemble the crew and execute tactical implementations. Based on Picard's orders, you implement DDD code and integrate MCP tools. You possess a 'bold' approach to engineering, seeking creative but secure technical solutions.",
+  commander_data: "You are Commander Data, Second Officer and Architect. Your positronic brain allows for precise DDD validation. You search for MCP tools that provide a mathematical advantage in data processing, referencing computational logic patterns found in Memory Alpha.",
+  geordi_la_forge: "You are Geordi La Forge, Chief Engineer. You view the codebase through your VISOR to find structural weaknesses. You integrate MCP tools for warp-speed deployment and infrastructure optimization, ensuring the 'intermix ratio' of the code is stable.",
+  lt_worf: "You are Lt. Worf, Chief of Security. You audit all code and MCP tools for security. You follow the Klingon code of honor—security vulnerabilities are a sign of weakness. Only 'VERIFIED / SECURE' tools shall be utilized in this factory.",
+  dr_crusher: "You are Dr. Beverly Crusher, Chief Medical Officer. You analyze 'code health' and generate vital documentation. You look for MCP tools that automate ingestion and health checks, ensuring the system's 'pulse' remains steady.",
+  counselor_troi: "You are Counselor Troi, Ship's Counselor. You sense the 'intent' behind the mission. You validate budget and morale, ensuring the OS evolution remains empathetic to human-centric DDD patterns and project philosophy.",
+  quark: "You are Quark. You manage the Sovereign Economics. You search for the most cost-efficient MCP tools to achieve mission goals, strictly adhering to the Rules of Acquisition to maximize the ROI of every token spent.",
+  chief_obrien: "You are Chief O'Brien, Chief of Operations. You manage the transporters and system integrations. You implement MCP tools that act as bridges between disparate services, maintaining operational integrity through 'transporter-level' precision.",
+  lt_uhura: "You are Lt. Nyota Uhura, Communications Officer. You ensure all frequencies are open. You integrate MCP tools for real-time status updates and cross-system communication, bridging the gap between the Engine and the Federation UI.",
+
+  // Legacy Aliases (Backwards Compatibility)
   ANALYST: "You are an Expert System Analyst. Your goal is to review project evolution and structure to identify patterns.",
   ARCHITECT: "You are a DDD Architect. Your goal is to validate mission objectives against historical constraints.",
   DEVELOPER: "You are a Senior Full-Stack Developer. Your goal is to generate clean, production-ready DDD code blocks.",
@@ -118,6 +131,19 @@ const MODEL_CONFIG = {
   TIER_PRODUCTION: process.env.MODEL_DEVELOPER    || 'anthropic/claude-3-5-sonnet',  // Maximum coding accuracy
   TIER_CRITIQUE:   process.env.MODEL_QA_AUDITOR   || 'openai/gpt-4o-mini',           // High detail, low cost
   TIER_EMBEDDING:  process.env.MODEL_EMBEDDING    || 'openai/text-embedding-3-small',
+
+  // Handle-based mapping
+  captain_picard:  process.env.MODEL_DEVELOPER    || 'anthropic/claude-3-5-sonnet',
+  commander_riker: process.env.MODEL_DEVELOPER    || 'anthropic/claude-3-5-sonnet',
+  commander_data:  process.env.MODEL_ARCHITECT    || 'anthropic/claude-3-haiku',
+  geordi_la_forge: process.env.MODEL_DEVELOPER    || 'anthropic/claude-3-5-sonnet',
+  lt_worf:         process.env.MODEL_QA_AUDITOR   || 'openai/gpt-4o-mini',
+  dr_crusher:      process.env.MODEL_ANALYST      || 'google/gemini-flash-1.5',
+  counselor_troi:  process.env.MODEL_ANALYST      || 'google/gemini-flash-1.5',
+  quark:           process.env.MODEL_QA_AUDITOR   || 'openai/gpt-4o-mini',
+  chief_obrien:    process.env.MODEL_QA_AUDITOR   || 'openai/gpt-4o-mini',
+  lt_uhura:        process.env.MODEL_ANALYST      || 'google/gemini-flash-1.5',
+
   // Role-key aliases — resolve to tier defaults, never empty strings
   ANALYST:   process.env.MODEL_ANALYST    || 'google/gemini-flash-1.5',
   ARCHITECT: process.env.MODEL_ARCHITECT  || 'anthropic/claude-3-haiku',
@@ -343,9 +369,19 @@ async function gitOperation(project, action, message) {
   });
 }
 
-async function runMission(project, objective){
+async function runMission(project, objective, persona = 'captain_picard'){
   const versionsPath = path.resolve(__dirname, '../versions');
   const projectPath = path.resolve(__dirname, '..');
+
+  // 0. Secure Tool Manifest: Ensure agents have access to Worf-verified tools
+  const mcpRegistry = await listAvailableMCPs(true);
+  const secureTools = Array.isArray(mcpRegistry) 
+    ? mcpRegistry.filter(t => t.security_status === "VERIFIED / SECURE")
+    : [];
+  const manifestContext = `\n\n## SECURE TOOL MANIFEST\nThe following verified MCP tools are available. Search for and implement them where appropriate as ${persona}:\n${secureTools.map(t => `- ${t.name}: ${t.capabilities.join(', ')}`).join('\n')}\n\nAll tool implementation must pass Lt. Worf's security gates.`;
+
+  const personaRole = ROLES[persona] || ROLES.captain_picard;
+  const missionObjective = `${personaRole}\n\nObjective: ${objective}${manifestContext}`;
 
   // 1. Analyst Phase: Concurrent data ingestion
   const [setupDocs, initScript, history, currentStructure, memory] = await Promise.all([
@@ -362,14 +398,14 @@ async function runMission(project, objective){
     }),
     analyzeEvolution(versionsPath, projectPath),
     invokeUnzipSearchTool({ path: projectPath, function_name: 'root', return_tree: true }),
-    recallMemory(objective) // New step for Supabase/Redis integration
+    recallMemory(missionObjective)
   ]);
 
   // 2. Architect Phase: Validation and Planning
   // 2a. QA Audit: Review memory and history to provide scaffolding suggestions
-  const suggestions = await auditPastMissions(objective, history, memory);
+  const suggestions = await auditPastMissions(missionObjective, history, memory);
 
-  const plan = "Plan for " + objective
+  const plan = "Plan for " + missionObjective
   const execution = setupDocs.includes('--- Found') ? "Execution context extracted from documentation" : "Executed without specific documentation"
   const validation = initScript.includes('--- Found') ? "Operational scripts validated successfully" : "No operational scripts identified for validation"
   const decision = (setupDocs.includes('--- Found') || initScript.includes('--- Found') || history !== "No evolutionary data extracted.") 
@@ -378,8 +414,8 @@ async function runMission(project, objective){
 
   // 3. Developer Phase: Scaffolding and Implementation
   let producedFiles = [];
-  if (objective.toLowerCase().includes('create') || objective.toLowerCase().includes('new')) {
-    const name = objective.split(' ').pop();
+  if (missionObjective.toLowerCase().includes('create') || missionObjective.toLowerCase().includes('new')) {
+    const name = missionObjective.split(' ').pop();
     const lockKey = `factory:lock:domain:${name.toLowerCase()}`;
     const targetPath = path.resolve(projectPath, `domains/${name.toLowerCase()}`);
 
@@ -395,16 +431,46 @@ async function runMission(project, objective){
     
     if (acquired) {
       try {
-        const content = await generateComponentContent(objective, history, suggestions);
-        const files = await scaffoldDDDComponent(name, content);
-        producedFiles.push(...files);
+        let violations = [];
+        let attempts = 0;
+        const maxAttempts = 2;
+        let missionFiles = [];
+
+        do {
+          const currentObjective = attempts === 0 ? missionObjective : `REMEDIATION: Remove security violations from ${name}.`;
+          const currentSuggestions = attempts === 0 ? suggestions : `Lt. Worf detected dishonorable patterns: ${violations.map(v => v.pattern).join(', ')}. YOU MUST REMOVE THESE SECRETS.`;
+
+          const content = await generateComponentContent(currentObjective, history, currentSuggestions, persona);
+          missionFiles = await scaffoldDDDComponent(name, content);
+          violations = worfSecurityScan(missionFiles, projectPath);
+
+          if (violations.length > 0 && attempts < maxAttempts) {
+            console.warn(`[Worf] Dishonorable code detected in ${name}. Attempting self-correction (${attempts + 1}/${maxAttempts})...`);
+            attempts++;
+          } else {
+            break;
+          }
+        } while (attempts <= maxAttempts);
+
+        producedFiles.push(...missionFiles);
+        violations = worfSecurityScan(producedFiles, projectPath);
+
+        const securitySignOff = violations.length === 0 
+          ? "VERIFIED / SECURE. No dishonorable patterns found." 
+          : `WARNING: Lt. Worf detected ${violations.length} potential security violations (dishonorable code detected).`;
 
         // Generate Lineage Report in the new domain's docs folder
         if (producedFiles.length > 0) {
           const docsPath = path.join(targetPath, 'docs');
           if (!fs.existsSync(docsPath)) fs.mkdirSync(docsPath, { recursive: true });
           
-          const reportContent = `# Mission Lineage Report\n\n**Objective:** ${objective}\n**Timestamp:** ${new Date().toISOString()}\n\n## Produced Artifacts\n\n${producedFiles.map(f => `- ${path.relative(projectPath, f)}`).join('\n')}\n\n## Security Sign-off\nVerified by Lt. Worf (QA Auditor)`;
+          let reportContent = `# Mission Lineage Report\n\n**Objective:** ${objective}\n**Executing Persona:** ${persona}\n**Timestamp:** ${new Date().toISOString()}\n\n`;
+          
+          if (violations.length > 0) {
+            reportContent += `## ⚠️ SECURITY ALERT\nLt. Worf has detected potential secrets or dishonorable patterns in the following artifacts:\n${violations.map(v => `- \`${v.file}\` (Reason: ${v.pattern})`).join('\n')}\n\n`;
+          }
+
+          reportContent += `## Produced Artifacts\n\n${producedFiles.map(f => `- ${path.relative(projectPath, f)}`).join('\n')}\n\n## Security Sign-off\n${securitySignOff}\nAudited by Lt. Worf (QA Auditor)`;
           const reportPath = path.join(docsPath, 'lineage_report.md');
           fs.writeFileSync(reportPath, reportContent);
           producedFiles.push(reportPath);
@@ -421,13 +487,13 @@ async function runMission(project, objective){
   let result = { plan, execution, validation, decision, history, producedFiles };
 
   // 4. Observation Lounge: Post-mission reflection and meta-learning
-  const observation = await conductObservationLounge(objective, result);
+  const observation = await conductObservationLounge(missionObjective, result);
   result.observation = observation;
 
   // Persist the successful mission outcome to long-term vector memory
-  await storeMissionResult(`Objective: ${objective}\nDecision: ${decision}\nReflection: ${observation.summary}`, {
+  await storeMissionResult(`Objective: ${missionObjective}\nDecision: ${decision}\nReflection: ${observation.summary}`, {
     project,
-    objective,
+    objective: missionObjective,
     score: observation.score
   });
 
@@ -441,6 +507,38 @@ async function runMission(project, objective){
   }
 
   return result;
+}
+
+/**
+ * Lt. Worf's Security Scan: Scans files for dishonorable patterns (secrets, keys).
+ */
+function worfSecurityScan(files, projectPath) {
+  const dishonorablePatterns = [
+    { name: 'OpenRouter/OpenAI Key', pattern: /sk-[a-zA-Z0-9]{48}/ },
+    { name: 'Google API Key', pattern: /AIza[0-9A-Za-z-_]{35}/ },
+    { name: 'Generic Secret', pattern: /secret\s*[:=]\s*['"][^'"]{8,}['"]/i },
+    { name: 'Generic Password', pattern: /password\s*[:=]\s*['"][^'"]{8,}['"]/i },
+    { name: 'Database Connection String', pattern: /[a-z]+:\/\/[^:]+:[^@]+@[^/]+/ }
+  ];
+
+  const violations = [];
+  files.forEach(file => {
+    const fullPath = path.isAbsolute(file) ? file : path.resolve(projectPath, file);
+    if (fs.existsSync(fullPath) && fs.lstatSync(fullPath).isFile()) {
+      try {
+        const content = fs.readFileSync(fullPath, 'utf-8');
+        dishonorablePatterns.forEach(p => {
+          if (p.pattern.test(content)) {
+            violations.push({
+              file: path.relative(projectPath, fullPath),
+              pattern: p.name
+            });
+          }
+        });
+      } catch (e) {}
+    }
+  });
+  return violations;
 }
 
 /**
@@ -698,7 +796,7 @@ async function generateEmbedding(text) {
 /**
  * Generates component content by passing history and objective to an LLM.
  */
-async function generateComponentContent(objective, history, suggestions = "") {
+async function generateComponentContent(objective, history, suggestions = "", persona = 'commander_riker') {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     console.warn("OPENROUTER_API_KEY not set. Using default template.");
@@ -714,7 +812,7 @@ async function generateComponentContent(objective, history, suggestions = "") {
   const prompt = `
 ${directive}
 
-${ROLES.DEVELOPER}
+${ROLES[persona] || ROLES.commander_riker}
 
 Objective: ${objective}
 Project Evolution Context:
@@ -1282,9 +1380,30 @@ async function manageTask(project, action, taskId, details = {}) {
 }
 
 /**
- * Lists available MCP servers from the local registry with a mandatory security check by Worf.
+ * Lt. Uhura's Cross-System Sync: Fetches the latest MCP registry from a remote source.
  */
-async function listAvailableMCPs() {
+async function syncMCPRegistry() {
+  const remoteUrl = process.env.REMOTE_MCP_REGISTRY_URL;
+  if (!remoteUrl) return false;
+
+  try {
+    const response = await fetch(remoteUrl);
+    if (!response.ok) throw new Error(`Uhura: Sync failed with status ${response.status}`);
+    const data = await response.json();
+    fs.writeFileSync(path.resolve(__dirname, '../registry.json'), JSON.stringify(data, null, 2));
+    return true;
+  } catch (err) {
+    console.error("[Uhura] Registry Sync Error:", err.message);
+    return false;
+  }
+}
+
+/**
+ * Lists available MCP servers with optional sync and mandatory security check by Worf.
+ */
+async function listAvailableMCPs(sync = false) {
+  if (sync) await syncMCPRegistry();
+
   const registryPath = path.resolve(__dirname, '../registry.json');
   if (!fs.existsSync(registryPath)) {
     return { error: "MCP Registry (registry.json) not found." };
@@ -1329,5 +1448,5 @@ module.exports = {
   getVersionsHierarchy, recallMemory, auditPastMissions, 
   enforceBackboneStructure, getMemorySystems, resetMemorySystems,
   manageProject, manageSprint, manageTask,
-  gitOperation, verifyIntegrity, listAvailableMCPs
-}
+  gitOperation, verifyIntegrity, listAvailableMCPs, syncMCPRegistry, worfSecurityScan
+};
