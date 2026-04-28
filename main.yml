@@ -1,32 +1,183 @@
-name: Sovereign Factory CI/CD
-on: [push, pull_request]
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      target_app:
+        description: 'Target Vercel application to deploy'
+        required: true
+        default: 'dashboard'
+        type: choice
+        options:
+          - dashboard
+          - civic
+
+env:
+  # Ensure pnpm is used for all Node.js package management
+  PNPM_HOME: "/opt/pnpm"
+  PATH: "$PNPM_HOME:$PATH"
+
 jobs:
-  build-and-test:
+  build-test-deploy:
+    name: "🚀 Build, Test & Deploy"
     runs-on: ubuntu-latest
-    env:
-      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-      REDIS_URL: ${{ secrets.REDIS_URL }}
+    permissions:
+      contents: write # Required for stefanzweifel/git-auto-commit-action
+      pull-requests: write # Optional, if you want to comment on PRs
+      id-token: write # Required for Vercel Action with OIDC
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node.js
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required for git-auto-commit-action to work correctly
+
+      - name: Setup Node.js (v20)
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Setup Python
+
+      - name: Install pnpm
+        run: |
+          npm install -g pnpm@8.15.4 # Pin to required version
+
+      - name: Setup Python (v3.11)
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 8
-      - name: Install Dependencies
+
+      - name: Install Python dependencies
         run: |
-          pnpm install
-          pip install pydantic crewai
-      - name: Run Tests
+          python -m pip install --upgrade pip
+          pnpm setup:python
+
+      - name: Install Node.js dependencies
+        run: pnpm install
+
+      - name: Run JavaScript Tests (Vitest)
         run: pnpm test
-      - name: Deploy Business Units
-        run: echo "Deploying generated DDD domains..."
+
+      - name: Run Python Tests (Pytest)
+        run: pytest tools/
+
+      - name: Run Worf Security Audit
+        run: node core/worf-pre-commit.js
+
+      - name: Run Worf DDD Architecture Audit
+        run: node apps/api/worf-ddd-audit.js
+
+      - name: Verify Worf Audit Integrity (E2E)
+        run: |
+          echo "import { runMission } from '../application/MissionService.js';" > domains/mission/domain/integrity-violation-test.js
+          git add domains/mission/domain/integrity-violation-test.js
+          if node apps/api/worf-ddd-audit.js; then
+            echo "Security Alert: Worf Audit failed to block a dishonourable import!"
+            exit 1
+          else
+            echo "Success: Worf Audit correctly identified and blocked the violation."
+          fi
+          rm domains/mission/domain/integrity-violation-test.js
+
+      - name: Build Next.js Dashboard (Standard)
+        if: github.event.inputs.target_app == 'dashboard' || github.event_name == 'push'
+        run: pnpm --filter @apps/dashboard build
+
+      - name: Build Next.js Civic App
+        # Build civic if manually selected OR if files in civic domain changed on push
+        if: github.event.inputs.target_app == 'civic' || (github.event_name == 'push' && contains(github.event.head_commit.message, 'feat(civic)'))
+        run: pnpm --filter domains/civic/ui build
+
+      - name: Set Vercel Deployment Variables
+        id: set-vercel-vars
+        run: |
+          if [[ "${{ github.event.inputs.target_app }}" == "civic" ]]; then
+            echo "VERCEL_ORG_ID_TO_DEPLOY=${{ secrets.VERCEL_ORG_ID_CIVIC }}" >> $GITHUB_ENV
+            echo "VERCEL_PROJECT_ID_TO_DEPLOY=${{ secrets.VERCEL_PROJECT_ID_CIVIC }}" >> $GITHUB_ENV
+            echo "VERCEL_ROOT_DIRECTORY=domains/civic/ui" >> $GITHUB_ENV
+          else
+            echo "VERCEL_ORG_ID_TO_DEPLOY=${{ secrets.VERCEL_ORG_ID }}" >> $GITHUB_ENV
+            echo "VERCEL_PROJECT_ID_TO_DEPLOY=${{ secrets.VERCEL_PROJECT_ID }}" >> $GITHUB_ENV
+            echo "VERCEL_ROOT_DIRECTORY=apps/dashboard" >> $GITHUB_ENV
+          fi
+
+      - name: Deploy Frontend to Vercel
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ env.VERCEL_ORG_ID_TO_DEPLOY }}
+          vercel-project-id: ${{ env.VERCEL_PROJECT_ID_TO_DEPLOY }}
+          root-directory: ${{ env.VERCEL_ROOT_DIRECTORY }}
+          # For subdomain deployment, ensure the Vercel project is configured
+          # with the desired domain (e.g., civic.pbradygeorgen.com) in Vercel settings.
+          # The Vercel Action deploys to the project, and Vercel handles the domain routing.
+          # If deploying a specific subdomain, the Vercel project itself must be set up
+          # to serve that subdomain.
+          # The `vercel-project-id` and `vercel-org-id` determine *which* Vercel project
+          # is deployed to.
+          # The `root-directory` tells Vercel where the Next.js app is within the monorepo.
+
+      - name: Build Docker Image for MCP Server
+        run: |
+          docker build -t mcp-server:latest -f apps/api/Dockerfile .
+
+      - name: Deploy MCP Server to EC2
+        if: github.ref == 'refs/heads/main'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/ai-enterprise-os
+            git pull origin main
+            # Build the image on the host since we aren't using a central ECR registry yet
+            docker build -t mcp-server:latest -f apps/api/Dockerfile .
+            docker stop mcp-server || true
+            docker rm mcp-server || true
+            docker run -d --name mcp-server -p 3002:3002 --restart always \
+              -e OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }} \
+              -e SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
+              -e SUPABASE_KEY=${{ secrets.SUPABASE_KEY }} \
+              -e REDIS_URL=${{ secrets.REDIS_URL }} \
+              -e PYTHON_BIN=/usr/bin/python3 \
+              -e DOMAIN_TARGET=civic.pbradygeorgen.com \
+              mcp-server:latest
+            # Using pm2 for process management is also an option, but Docker is more self-contained for this example
+            # pm2 restart mcp-server # If pm2 is configured on EC2
+
+      - name: Auto-commit lineage_report.md
+        if: github.ref == 'refs/heads/main'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "feat(ci): Auto-commit lineage reports after deployment"
+          # Only commit if lineage_report.md or registry.json has changed
+          file_pattern: 'domains/**/docs/lineage_report.md registry.json'
+          # Ensure the commit is made by a bot user
+          commit_user_name: 'github-actions[bot]'
+          commit_user_email: 'github-actions[bot]@users.noreply.github.com'
+          commit_author: 'github-actions[bot] <github-actions[bot]@users.noreply.github.com>'
+
+
+  # The existing Worf Security Audit and Data Architecture Audit jobs from secrets-audit.yml
+  # are assumed to be separate, pre-merge checks or can be integrated as steps above.
+  # For this consolidated main.yml, we've included their core logic as steps.
+  # If you prefer them as separate jobs, they would be defined here,
+  # and the 'build-test-deploy' job would 'needs:' them.
+
+  # Example of how to integrate existing audit logic as separate jobs if preferred:
+  # worf-security-gate:
+  #   uses: ./.github/workflows/secrets-audit.yml
+  #   with:
+  #     context: 'ci-pipeline'
+  # data-architecture-audit:
+  #   uses: ./.github/workflows/secrets-audit.yml
+  #   with:
+  #     context: 'ci-pipeline'
+  #   needs: worf-security-gate

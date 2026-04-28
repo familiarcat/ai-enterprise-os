@@ -1,0 +1,133 @@
+Master architecture reference for the Sovereign Factory / ai-enterprise-os platform. Use this skill for ANY task involving the ai-enterprise-os repo, the openrouter-crew-platform repo, the MCP HTTP bridge, the unified dashboard, local stack startup, key file locations, environment variables, SDK call patterns, or cross-repo integration. Trigger on: "sovereign factory", "ai-enterprise-os", "orc-p", "openrouter-crew-platform", "MCP bridge", "crew dashboard", "stack startup", or any question about how the two repos fit together.
+
+Sovereign Factory — Master Architecture Reference
+
+Claude Code context for the unified ai-enterprise-os + openrouter-crew-platform platform.
+Read CLAUDE.md at repo root first; this skill augments it with cross-repo synthesis.
+
+<!-- WEIGHT METADATA
+Each section carries a `weight` (0.0–1.0). Higher = more essential to keep.
+Future trimming: drop sections whose weight falls below active threshold.
+Threshold levels: MVP=0.0 (keep all) | SLIM=0.5 | CORE=0.7 | MIN=0.9
+-->
+
+Section Index <!-- weight:1.0 — always keep -->
+| Section | Weight | Description |
+|---------|--------|-------------|
+| Two-Repo Model | 0.9 | How the repos relate |
+| Architecture Diagram | 0.8 | Full stack diagram |
+| Key Files Quick-Ref | 0.9 | File → purpose table |
+| Local Stack Startup | 0.9 | Terminal commands to run stack |
+| Environment Variables | 0.7 | Required env vars |
+| SDK Call Pattern | 0.8 | How Next.js calls MCP bridge |
+| MCP Tools Reference | 0.8 | All 10 MCP tools |
+| Known Bugs Fixed | 0.5 | Recent session bug fixes |
+| Cross-Repo Integration Map | 0.6 | orc-p ↔ ai-eos file mapping |
+
+Two-Repo Model <!-- weight:0.9 -->
+| Repo | Role | Local Path |
+|------|------|------------|
+| ai-enterprise-os | Engine — Node.js orchestrator, MCP HTTP bridge (port 3002), Python CrewAI, DDD scaffolding | ~/Dev/ai-enterprise-os |
+| openrouter-crew-platform | UI Shell — Turbo/pnpm monorepo, Next.js alex-dashboard, 50+ components, n8n, Terraform | ~/Dev/openrouter-crew-platform |
+
+The MCP HTTP bridge (apps/api/mcp-http-bridge.mjs, port 3002) is the universal agent bus. Every UI, VSCode extension, and script communicates with the engine exclusively through SSE + JSON-RPC on this bridge. Never call the orchestrator directly from the dashboard — always go through the bridge.
+Unified goal: Merge apps/dashboard (ai-eos, 4-step mission flow + MCP client) with apps/alex-dashboard (orc-p, 50+ components + Star Trek personas) into one coherent operator interface.
+
+Architecture Diagram <!-- weight:0.8 -->
+Browser / VSCode WebView
+  apps/dashboard (Next.js 15)   OR   apps/vscode (VSCode ext.)
+  ┌──────────────┬───────────────┬──────────────────────────────┐
+  │ CrewSelector │ TaskLLMPanel  │ ObservationLounge             │
+  │  (Step 1)    │  (Step 2)     │ + SovereignAgentViewport      │
+  └──────────────┴───────────────│  (Step 3)                     │
+  ┌──────────────────────────────┴──────────────────────────────┐
+  │ CodeExecutionPanel (Step 4)                                  │
+  └──────────────────────────────────────────────────────────────┘
+              │ POST /api/mcp/execute  (Next.js API Route)
+              ▼
+  MCP HTTP Bridge  apps/api/mcp-http-bridge.mjs  (port 3002)
+  GET /sse → SSEServerTransport (per-session)
+  POST /messages?sessionId= → JSON-RPC tool dispatch
+  GET /health   GET /crew/personas
+              │ require('../core/orchestrator')
+              ▼
+  Orchestrator  core/orchestrator.js  (1200+ lines)
+  ├─ runMission() / runMissions()
+  ├─ invokeCrewAgent() — Python CrewAI bridge (stdin)
+  ├─ invokeUnzipSearchTool() — Python code search
+  ├─ recallMemory() — Redis cache + Supabase vectors
+  ├─ scaffoldDDDComponent() — write domain/app/infra/ui/tests
+  └─ verifyIntegrity() — health check all systems
+       │                         │
+       ▼                         ▼
+  Redis                     Supabase
+  Distributed locks         Tables: missions (vectors), observations
+  1hr memory cache          RPC: match_missions(), match_observations()
+       │                    Threshold: 0.4 cosine similarity
+       ▼
+  Python Tools (spawned via stdin JSON)
+  tools/crew_manager.py       — CrewAI multi-agent workflows
+  tools/unzip_search_tool.py  — codebase search in archives
+
+Key Files Quick-Ref <!-- weight:0.9 -->
+ai-enterprise-os
+| File | Purpose |
+|------|---------|
+| CLAUDE.md | Authoritative system prompt — read first every session |
+| core/orchestrator.js | Main engine: DDD scaffolding, mission lifecycle |
+| apps/api/mcp-http-bridge.mjs | HTTP transport: SSE sessions, JSON-RPC routing, 10 tools |
+| apps/dashboard/app/page.tsx | 4-step Mission Control UI |
+| apps/dashboard/lib/crew-manifest.ts | SSOT for crew personas, models, capabilities |
+| scripts/run-pipeline.sh | Master pipeline runner (--phase, --step, --from, --list) |
+
+openrouter-crew-platform
+| File | Purpose |
+|------|---------|
+| CLAUDE.md | orc-p project memory and conventions |
+| domains/shared/cost-tracking/src/model-router.ts | ModelRouter class — complexity-based routing |
+| apps/alex-dashboard/lib/mcp/universal-client.ts | Universal MCP client |
+
+Local Stack Startup <!-- weight:0.9 -->
+```bash
+# Terminal 1 — Redis
+redis-server
+
+# Terminal 2 — MCP HTTP Bridge
+cd ~/Dev/ai-enterprise-os
+node apps/api/mcp-http-bridge.mjs
+
+# Terminal 3 — Dashboard
+cd ~/Dev/ai-enterprise-os/apps/dashboard
+pnpm dev
+```
+Smoke tests:
+`./scripts/p0-s6-smoke-test.sh`
+
+Environment Variables <!-- weight:0.7 -->
+Required in ~/.env or .env at repo root:
+OPENROUTER_API_KEY, SUPABASE_URL, SUPABASE_KEY, REDIS_URL, MCP_BRIDGE_PORT.
+
+SDK Call Pattern — Next.js → MCP Bridge <!-- weight:0.8 -->
+```typescript
+// POST /api/mcp/execute
+const response = await fetch('/api/mcp/execute', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    tool: 'run_factory_mission',
+    args: { project: 'ai-enterprise-os', objective: '...', persona: 'commander_riker' }
+  })
+});
+```
+
+MCP Tools Reference <!-- weight:0.8 -->
+All 10 tools exposed at `apps/api/mcp-http-bridge.mjs`. All LLM-dependent tools require `OPENROUTER_API_KEY`.
+
+Known Bugs Fixed (2026-04-15) <!-- weight:0.5 -->
+MODEL_CONFIG legacy mapping, gitOperation shell injection, run-pipeline p0-s0/p0-s3b registry.
+
+Cross-Repo Integration Map <!-- weight:0.6 -->
+| orc-p File | ai-eos Equivalent | Notes |
+|------------|-------------------|-------|
+| domains/shared/agent-orchestration/src/crew-manifest.ts | apps/dashboard/lib/crew-manifest.ts | ai-eos is authoritative |
+| apps/alex-dashboard/app/observation-lounge/page.tsx | apps/dashboard/components/ObservationLounge.tsx | Already adapted |

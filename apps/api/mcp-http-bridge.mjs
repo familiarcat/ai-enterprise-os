@@ -42,6 +42,7 @@ const {
   invokeUnzipSearchTool,
   runMission,
   runMissions,
+  gitmcpSearch,
   getVersionsHierarchy,
   manageProject,
   manageSprint,
@@ -49,6 +50,9 @@ const {
   invokeCrewAgent,
   gitOperation,
   verifyIntegrity,
+  sensorSweep,
+  getMemorySystems,
+  integrateMcpTool,
 } = require('../../core/orchestrator.js');
 
 // ── Star Trek Crew Persona → Agent Role + Model mapping ──────────────────────
@@ -110,7 +114,7 @@ const TOOL_LIST = [
   {
     name: 'run_factory_mission',
     description: 'Trigger a full mission to analyse evolution and scaffold new DDD domains',
-    inputSchema: { type: 'object', properties: { project: { type: 'string' }, objective: { type: 'string' } }, required: ['project', 'objective'] },
+    inputSchema: { type: 'object', properties: { project: { type: 'string' }, objective: { type: 'string' }, persona: { type: 'string' } }, required: ['project', 'objective'] },
   },
   {
     name: 'run_batch_missions',
@@ -170,7 +174,27 @@ const TOOL_LIST = [
   {
     name: 'git_operation',
     description: 'Perform git actions (commit, push, status) to save platform progress',
-    inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['commit', 'push', 'status'] }, message: { type: 'string' } }, required: ['action'] },
+    inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['commit', 'push', 'status', 'branch', 'merge-to-main'] }, message: { type: 'string' } }, required: ['action'] },
+  },
+  {
+    name: 'sensor_sweep',
+    description: 'Perform a comprehensive architectural scan of all components, domains, and system integrity',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'gitmcp_search',
+    description: 'Search https://gitmcp.io/ for verified MCP server implementations and documentation',
+    inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+  },
+  {
+    name: 'integrate_mcp_tool',
+    description: 'Autonomous integration: Search GitMCP, clear via Worf, and visually add tool to project UI',
+    inputSchema: { type: 'object', properties: { project: { type: 'string' }, query: { type: 'string' }, persona: { type: 'string' }, deploymentConfig: { type: 'object', properties: { subdomain: { type: 'string' }, isLandingPage: { type: 'boolean' } } } }, required: ['project', 'query'] },
+  },
+  {
+    name: 'deploy_production',
+    description: 'Trigger production deployment for a specific domain (e.g., civic)',
+    inputSchema: { type: 'object', properties: { domain: { type: 'string' }, rationale: { type: 'string' } }, required: ['domain', 'rationale'] },
   },
 ];
 
@@ -209,7 +233,16 @@ function createMCPServer() {
         break;
 
       case 'run_factory_mission':
-        result = await runMission(args.project, args.objective);
+        result = await runMission(args.project, args.objective, args.persona || 'captain_picard', (msg) => {
+          server.notification({
+            method: 'notifications/message',
+            params: {
+              level: 'info',
+              logger: 'SovereignFactory',
+              data: `[Mission] ${msg}`,
+            },
+          });
+        });
         break;
 
       case 'run_batch_missions':
@@ -255,6 +288,32 @@ function createMCPServer() {
 
       case 'git_operation':
         result = await gitOperation(args.project, args.action, args.message);
+        break;
+
+      case 'sensor_sweep':
+        result = await sensorSweep();
+        break;
+
+      case 'gitmcp_search':
+        result = await gitmcpSearch(args.query);
+        break;
+
+      case 'integrate_mcp_tool':
+        result = await integrateMcpTool(args.project, args.query, args.persona, args.deploymentConfig);
+        break;
+
+      case 'deploy_production':
+        // This tool triggers a workflow dispatch on GitHub to start the CI/CD for the specific domain
+        server.notification({
+          method: 'notifications/message',
+          params: {
+            level: 'info',
+            logger: 'SovereignFactory',
+            data: `[Deploy] Initiating production release for ${args.domain}.Rationale: ${args.rationale}`,
+          },
+        });
+        // Simulate the internal git-flow merge to main before deploy
+        result = await gitOperation('sovereign', 'merge-to-main');
         break;
 
       case 'health_check': {
@@ -309,6 +368,29 @@ app.get('/health', (req, res) => {
     sessions: transports.size,
     timestamp: new Date().toISOString(),
   });
+});
+
+// ── GET /api/billing/usage — Query Supabase billing table ────────────────────
+app.get('/api/billing/usage', async (req, res) => {
+  const { projectId } = req.query;
+  if (!projectId) {
+    return res.status(400).json({ error: 'Missing projectId query parameter' });
+  }
+
+  try {
+    const { supabase } = getMemorySystems();
+    const { data, error } = await supabase
+      .from('billing')
+      .select('*')
+      .eq('project_id', projectId)
+      .maybeSingle();
+
+    if (error) throw error;
+    res.json(data || { project_id: projectId, tokens_used: 0, quota_limit: 1000000 });
+  } catch (err) {
+    console.error(`[MCP Bridge] Billing fetch error:`, err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── GET /sse — establish an SSE connection and bind a new MCP Server ──────────

@@ -57,7 +57,7 @@ export default function CrewSelector({ selected, onChange, singleSelect = false 
       {/* Filter Header */}
       <div className="grid grid-cols-12 border-b-2 border-black">
         <div className="col-span-12 md:col-span-8 border-b-2 md:border-b-0 md:border-r-2 border-black relative">
-          <label className="absolute top-2 left-6 text-[9px] font-black text-red-600 uppercase tracking-[0.2em]">
+          <label className="absolute top-2 left-6 text-xs font-black text-red-600 uppercase tracking-[0.2em]">
             01 / Input Filter
           </label>
           <input
@@ -69,15 +69,15 @@ export default function CrewSelector({ selected, onChange, singleSelect = false 
         </div>
         <div className="col-span-12 md:col-span-4 flex divide-x-2 divide-black">
           <button
-            onClick={() => autoSelect(filter)}
-            className="flex-1 p-4 font-black uppercase tracking-[0.2em] text-[10px] hover:bg-black hover:text-white transition-all"
+            onClick={() => autoSelect(filter)} // Assuming filter is the query
+            className="flex-1 p-4 font-black uppercase tracking-[0.2em] text-xs hover:bg-black hover:text-white transition-all"
           >
             Auto-Select
           </button>
           {selected.length > 0 && (
             <button
               onClick={() => onChange([])}
-              className="flex-1 p-4 font-black uppercase tracking-[0.2em] text-[10px] bg-black text-white hover:bg-red-600 transition-all"
+              className="flex-1 p-4 font-black uppercase tracking-[0.2em] text-xs bg-black text-white hover:bg-red-600 transition-all"
             >
               Reset
             </button>
@@ -88,7 +88,7 @@ export default function CrewSelector({ selected, onChange, singleSelect = false 
       {/* Selection Status */}
       {selected.length > 0 && (
         <div className="bg-zinc-50 border-b-2 border-black p-4">
-          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-red-600 mb-1">
+          <div className="text-xs font-black uppercase tracking-[0.2em] text-red-600 mb-1">
             00 / Deployment Status
           </div>
           <div className="text-xs font-bold uppercase tracking-tight text-black">
@@ -113,7 +113,7 @@ export default function CrewSelector({ selected, onChange, singleSelect = false 
             <div className="flex justify-between items-start mb-8">
               <span className="text-5xl">{agent.emoji}</span>
               <div className="text-right">
-                <span className={['text-[9px] font-black uppercase tracking-[0.2em]', selected.includes(agent.handle) ? 'text-white/70' : 'text-red-600 group-hover:text-red-500'].join(' ')}>
+                <span className={['text-xs font-black uppercase tracking-[0.2em]', selected.includes(agent.handle) ? 'text-white/70' : 'text-red-600 group-hover:text-red-500'].join(' ')}>
                   02 / TIER
                 </span>
                 <div className="text-sm font-black uppercase tracking-tighter">{agent.preferredTier}</div>
@@ -124,7 +124,7 @@ export default function CrewSelector({ selected, onChange, singleSelect = false 
               <h3 className="text-3xl font-black uppercase tracking-tighter leading-none mb-2">
                 {agent.displayName}
               </h3>
-              <div className={['text-[10px] font-bold uppercase tracking-widest', selected.includes(agent.handle) ? 'text-white' : 'text-zinc-400'].join(' ')}>
+              <div className={['text-xs font-bold uppercase tracking-widest', selected.includes(agent.handle) ? 'text-white' : 'text-zinc-400'].join(' ')}>
                 {agent.dddRole}
               </div>
             </div>
@@ -134,14 +134,14 @@ export default function CrewSelector({ selected, onChange, singleSelect = false 
             </p>
 
             <div className="mt-auto pt-8 border-t border-current opacity-30">
-              <div className="text-[9px] font-black uppercase tracking-[0.2em] mb-4">
+              <div className="text-xs font-black uppercase tracking-[0.2em] mb-4">
                 02 / Capabilities
               </div>
               <div className="flex flex-wrap gap-2">
                 {agent.capabilities.map(cap => (
                   <span
                     key={cap}
-                    className="text-[9px] font-black uppercase tracking-widest border border-current px-2 py-1"
+                    className="text-xs font-black uppercase tracking-widest border border-current px-2 py-1"
                   >
                     {cap}
                   </span>
@@ -150,8 +150,8 @@ export default function CrewSelector({ selected, onChange, singleSelect = false 
             </div>
 
             {selected.includes(agent.handle) && (
-              <div className="absolute top-4 left-4 bg-white text-red-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest">
-                Selected
+              <div className="absolute top-4 left-4 bg-white text-red-600 px-2 py-1 text-xs font-black uppercase tracking-widest border border-red-600">
+                SELECTED
               </div>
             )}
           </button>

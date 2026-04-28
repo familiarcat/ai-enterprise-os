@@ -3,13 +3,19 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const express = require("express")
 const cors = require("cors")
-const { runMission, getVersionsHierarchy } = require("../../core/orchestrator")
+const { getEventBus } = require("./index")
+const { runMission, getVersionsHierarchy, getMissionStatus } = require("../../domains/mission/application/MissionService")
 const { allocate } = require("../../domains/fund/engine")
 const { record } = require("../../domains/revenue/engine")
+const { initMissionSubscriber } = require("../../domains/mission/infrastructure/MissionSubscriber")
 
+const eventBus = getEventBus()
 const app = express()
 app.use(cors())
 app.use(express.json())
+
+// Initialize domain subscribers to start listening for events on boot
+initMissionSubscriber();
 
 app.post("/run", async (req,res)=>{
   try {
@@ -41,6 +47,42 @@ app.get("/hierarchy", async (req, res) => {
   } catch (err) {
     console.error('[API] /hierarchy failure:', err);
     res.status(500).json({ error: "Hierarchy retrieval failed", details: err.message });
+  }
+});
+
+app.get("/telemetry", (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const sendEvent = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  const onCreated = (data) => sendEvent('mission.created', data);
+  const onCompleted = (data) => sendEvent('mission.completed', data);
+  const onFailed = (data) => sendEvent('mission.failed', data);
+
+  eventBus.on('mission.created', onCreated);
+  eventBus.on('mission.completed', onCompleted);
+  eventBus.on('mission.failed', onFailed);
+
+  req.on('close', () => {
+    eventBus.removeListener('mission.created', onCreated);
+    eventBus.removeListener('mission.completed', onCompleted);
+    eventBus.removeListener('mission.failed', onFailed);
+  });
+});
+
+app.get("/mission/:id", async (req, res) => {
+  try {
+    const status = await getMissionStatus(req.params.id);
+    if (!status) return res.status(404).json({ error: "Mission not found" });
+    res.json(status);
+  } catch (err) {
+    console.error('[API] /mission/:id failure:', err);
+    res.status(500).json({ error: "Retrieval failed", details: err.message });
   }
 });
 

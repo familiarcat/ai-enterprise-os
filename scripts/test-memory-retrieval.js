@@ -4,7 +4,7 @@
  * Verifies that the Orchestrator can retrieve seeded missions from Supabase.
  * Handles environment loading and tests both the abstract recallMemory function
  * and direct database connectivity.
- */
+ */ 
 require('dotenv').config();
 const { recallMemory, getMemorySystems } = require('../core/orchestrator');
 

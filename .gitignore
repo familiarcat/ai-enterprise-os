@@ -13,6 +13,10 @@
 # Keep the example template
 !.env.example
 
+# ── Analysis Logs ─────────────────────────────────────────────────────────────
+PROJECT_ANALYSIS.md
+scripts/PROJECT_ANALYSIS.md
+
 # ── Python ────────────────────────────────────────────────────────────────────
 .venv/
 __pycache__/

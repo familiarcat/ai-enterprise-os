@@ -62,14 +62,14 @@ export default function CodeExecutionPanel({
             {failed.length === 0 ? 'Mission' : 'Partial'} <br /> Complete
           </h2>
           <p className="text-xs font-black uppercase tracking-widest text-zinc-400">
-            Objective: <span className="text-black italic">{task}</span>
+            Objective: <span className="text-sm text-black italic">{task}</span>
           </p>
         </div>
         <div className={[
           'col-span-4 p-8 flex flex-col justify-between text-white',
           failed.length === 0 ? 'bg-black' : 'bg-red-600'
         ].join(' ')}>
-          <span className="text-[10px] font-black uppercase tracking-[0.2em]">04 / Stats</span>
+          <span className="text-xs font-black uppercase tracking-[0.2em]">04 / Stats</span>
           <div className="space-y-1">
             <div className="flex justify-between font-black uppercase text-xs">
               <span>Cost</span> <span>${totalCost.toFixed(4)}</span>
@@ -99,7 +99,7 @@ export default function CodeExecutionPanel({
                   <span className="text-2xl">{agent?.emoji ?? '🤖'}</span>
                   <h4 className="text-lg font-black uppercase tracking-tighter">{agent?.displayName ?? exec.handle}</h4>
                 </div>
-                <div className="flex items-center gap-6 text-[10px] font-black uppercase tracking-widest">
+                <div className="flex items-center gap-6 text-xs font-black uppercase tracking-widest">
                   {exec.cost !== undefined && (
                     <span className="text-zinc-400">Cost / ${exec.cost.toFixed(4)}</span>
                   )}
@@ -122,11 +122,11 @@ export default function CodeExecutionPanel({
               </div>
 
               {exec.producedFiles && exec.producedFiles.length > 0 && isExpanded && (
-                <div className="p-8 bg-white border-t-2 border-black">
-                  <div className="text-[10px] font-black uppercase tracking-[0.2em] text-red-600 mb-4">05 / Artifact Traceability</div>
+                <div className="p-8 bg-white border-t-2 border-black text-sm">
+                  <div className="text-xs font-black uppercase tracking-[0.2em] text-red-600 mb-4">05 / Artifact Traceability</div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {exec.producedFiles.map((file, idx) => (
-                      <div key={idx} className="flex items-center gap-2 p-2 border border-black text-[10px] font-mono truncate">
+                      <div key={idx} className="flex items-center gap-2 p-2 border border-black text-xs font-mono truncate">
                         <span className="text-red-600">📄</span>
                         {file}
                       </div>

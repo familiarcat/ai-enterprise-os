@@ -4,11 +4,11 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const { Server } = require("@modelcontextprotocol/sdk/server/index.js");
 const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js");
 const { CallToolRequestSchema, ListToolsRequestSchema } = require("@modelcontextprotocol/sdk/types.js");
-const { 
-  invokeUnzipSearchTool, runMission, runMissions, getVersionsHierarchy, 
-  manageProject, manageSprint, manageTask, invokeCrewAgent, gitOperation,
-  verifyIntegrity, listAvailableMCPs, syncMCPRegistry, worfSecurityScan
-} = require("../../core/orchestrator.js");
+const { invokeUnzipSearchTool, invokeCrewAgent, gitOperation, verifyIntegrity, listAvailableMCPs, syncMCPRegistry, worfSecurityScan } = require("../../core/orchestrator.js");
+const {
+  runMission, runMissions, getVersionsHierarchy,
+  manageProject, manageSprint, manageTask, resolveSkills
+} = require("../../domains/mission/application/MissionService.js");
 
 const server = new Server({
   name: "sovereign-factory",
@@ -192,6 +192,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
         required: ["files"]
       }
+    },
+    {
+      name: "list_skills",
+      description: "List all available .skill files in the orchestrator.",
+      inputSchema: { type: "object", properties: {} }
+    },
+    {
+      name: "get_skill",
+      description: "Get the content of a specific .skill file.",
+      inputSchema: {
+        type: "object",
+        properties: { name: { type: "string" } },
+        required: ["name"]
+      }
     }
   ]
 }));
@@ -240,6 +254,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     result = await syncMCPRegistry();
   } else if (name === "worf_security_scan") {
     result = await worfSecurityScan(args.files, path.resolve(__dirname, '../..'));
+  } else if (name === "list_skills") {
+    const skillsPath = path.resolve(__dirname, '../../core/skills');
+    result = fs.existsSync(skillsPath) ? fs.readdirSync(skillsPath).filter(f => f.endsWith('.skill')) : [];
+  } else if (name === "get_skill") {
+    const skillPath = path.resolve(__dirname, '../../core/skills', args.name.endsWith('.skill') ? args.name : `${args.name}.skill`);
+    result = fs.existsSync(skillPath) ? fs.readFileSync(skillPath, 'utf-8') : { error: "Skill not found" };
   } else if (name === "health_check") {
     const { spawnSync } = require('child_process');
     const scriptArgs = [path.resolve(__dirname, '../../scripts/verify_health.sh')];

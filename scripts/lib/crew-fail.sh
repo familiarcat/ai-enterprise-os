@@ -28,6 +28,7 @@ _crew_display() {
     dr_crusher)      echo "Dr. Beverly Crusher" ;;
     lt_uhura)        echo "Lieutenant Nyota Uhura" ;;
     quark)           echo "Quark" ;;
+    tasha_yar)       echo "Tasha Yar" ;;
     *)               echo "Unknown Crew Member" ;;
   esac
 }
@@ -44,6 +45,7 @@ _crew_rank() {
     dr_crusher)      echo "Chief Medical Officer, Expert System Analyst" ;;
     lt_uhura)        echo "Communications Officer, Cross-System Integration Analyst" ;;
     quark)           echo "Proprietor, Cost Optimization Analyst" ;;
+    tasha_yar)       echo "Tactical Officer, System Readiness Analyst" ;;
     *)               echo "Unknown Role" ;;
   esac
 }
@@ -60,6 +62,7 @@ _crew_domain() {
     dr_crusher)      echo "System health diagnosis, environment variables, dependency verification, Supabase" ;;
     lt_uhura)        echo "Cross-repo communication, webhook integration, Socket.io, dashboard wiring, .env propagation" ;;
     quark)           echo "Model routing costs, budget validation, OpenRouter tier selection, BarItalia \$1.50 target" ;;
+    tasha_yar)       echo "Tactical diagnostics, smoke testing, final deployment verification, pre-flight checks" ;;
     *)               echo "General systems" ;;
   esac
 }
@@ -76,6 +79,7 @@ _crew_quote() {
     dr_crusher)      echo "I've read the patient's vitals and I don't like what I see. Let's run a full diagnostic — environment, credentials, memory systems. No shortcuts." ;;
     lt_uhura)        echo "All channels are open, Captain — but something is interfering with the signal. I'll trace every communication pathway until I find the break." ;;
     quark)           echo "The 285th Rule of Acquisition: a failed pipeline is a missed opportunity for profit. Let Quark find the most cost-efficient path to resolution." ;;
+    tasha_yar)       echo "I grew up on a world with no law. This pipeline will respect the protocols of the Sovereign Factory, or it will be purged. Initiating final readiness check." ;;
     *)               echo "This failure requires immediate attention." ;;
   esac
 }

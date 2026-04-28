@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-
+// Import resetMemorySystems from the new core/memory.js
+import { resetMemorySystems } from './memory.js';
 // 1. Create stable hoisted mock objects to ensure the test and the factory share references.
 const { mockSupabase, mockRedis, mockSpawn } = vi.hoisted(() => ({
   mockSupabase: {
@@ -104,7 +105,7 @@ describe('Orchestrator Mission Logic', () => {
     }));
     
     // Ensure singletons are cleared so every test gets fresh mock instances.
-    orchestrator.resetMemorySystems();
+    resetMemorySystems();
     fs.existsSync.mockReturnValue(false);
     fs.readdirSync.mockReturnValue([]);
   });

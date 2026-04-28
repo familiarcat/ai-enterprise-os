@@ -72,7 +72,7 @@ export default function SovereignAgentViewport({
           'col-span-3 p-4 flex flex-col justify-center items-end transition-colors',
           isAlert ? 'bg-red-600 text-white' : status === 'THINKING' ? 'bg-black text-white' : 'bg-white text-black'
         ].join(' ')}>
-          <span className={['text-[9px] font-bold uppercase tracking-[0.2em] mb-1', isAlert ? 'text-white/70' : 'text-red-500'].join(' ')}>
+          <span className={['text-xs font-bold uppercase tracking-[0.2em] mb-1', isAlert ? 'text-white/70' : 'text-red-500'].join(' ')}>
             00 / STATE
           </span>
           <span className="text-xs font-black uppercase tracking-tighter">
@@ -82,17 +82,17 @@ export default function SovereignAgentViewport({
       </div>
 
       {/* Metadata Strip */}
-      <div className="grid grid-cols-12 border-b-2 border-black text-[10px] font-black uppercase tracking-widest bg-white">
+      <div className="grid grid-cols-12 border-b-2 border-black text-xs font-black uppercase tracking-widest bg-white">
         <div className="col-span-4 p-4 border-r-2 border-black">
-          <span className="text-red-600 block mb-1">01 / ID</span>
+          <span className="text-red-600 block mb-1 text-xs">01 / ID</span>
           <span className="text-black truncate block">{agentId}</span>
         </div>
         <div className="col-span-4 p-4 border-r-2 border-black">
-          <span className="text-red-600 block mb-1">02 / MODEL</span>
+          <span className="text-red-600 block mb-1 text-xs">02 / MODEL</span>
           <span className="text-black truncate block">{metadata?.model?.split('/').pop() || 'None'}</span>
         </div>
         <div className="col-span-4 p-4">
-          <span className="text-red-600 block mb-1">03 / COST</span>
+          <span className="text-red-600 block mb-1 text-xs">03 / COST</span>
           <span className="text-black block">
             {metadata?.cost !== undefined ? `$${metadata.cost.toFixed(4)}` : 'N/A'}
           </span>
@@ -101,13 +101,13 @@ export default function SovereignAgentViewport({
 
       {/* Tools & Security Stream */}
       {metadata?.usedTools && metadata.usedTools.length > 0 && (
-        <div className="px-6 py-2 border-b-2 border-black bg-white flex gap-2 overflow-x-auto scrollbar-hide">
-          <span className="text-[9px] font-black uppercase text-black whitespace-nowrap">Security Audit:</span>
+        <div className="px-6 py-2 border-b-2 border-black bg-white flex gap-2 overflow-x-auto scrollbar-hide text-xs">
+          <span className="font-black uppercase text-black whitespace-nowrap">Security Audit:</span>
           {metadata.usedTools.map((tool, i) => (
             <span 
               key={i} 
-              className={[
-                'text-[9px] font-black uppercase tracking-widest px-2 py-0.5 border-2 whitespace-nowrap',
+              className={[ // Changed text-[9px] to text-xs
+                'text-xs font-black uppercase tracking-widest px-2 py-0.5 border-2 whitespace-nowrap',
                 tool.isSecure ? 'border-black bg-white text-black' : 'border-red-600 bg-red-600 text-white'
               ].join(' ')}
             >
@@ -119,10 +119,10 @@ export default function SovereignAgentViewport({
 
       {/* Produced Files Breadcrumbs */}
       {metadata?.producedFiles && metadata.producedFiles.length > 0 && (
-        <div className="px-6 py-2 border-b-2 border-black bg-zinc-50 flex gap-2 overflow-x-auto scrollbar-hide">
-          <span className="text-[9px] font-black uppercase text-red-600 whitespace-nowrap">Artifacts:</span>
+        <div className="px-6 py-2 border-b-2 border-black bg-zinc-50 flex gap-2 overflow-x-auto scrollbar-hide text-xs">
+          <span className="font-black uppercase text-red-600 whitespace-nowrap">Artifacts:</span>
           {metadata.producedFiles.map((f, i) => (
-            <span key={i} className="text-[9px] font-mono font-bold text-black bg-white border border-black px-1 whitespace-nowrap">
+            <span key={i} className="font-mono font-bold text-black bg-white border border-black px-1 whitespace-nowrap">
               {f.split('/').pop()}
             </span>
           ))}
@@ -135,7 +135,7 @@ export default function SovereignAgentViewport({
         style={{ scrollbarWidth: 'auto', scrollbarColor: 'black transparent' }}
       >
         {streamContent ? (
-          <pre className="text-[11px] font-mono font-medium text-black whitespace-pre-wrap break-words leading-[1.4] selection:bg-black selection:text-white">
+          <pre className="text-xs font-mono font-medium text-black whitespace-pre-wrap break-words leading-relaxed selection:bg-black selection:text-white">
             {streamContent}
           </pre>
         ) : (
@@ -147,13 +147,13 @@ export default function SovereignAgentViewport({
 
       {/* Execution Time Accent */}
       {metadata?.executionTimeMs !== undefined && (
-        <div className="absolute bottom-6 right-6 bg-black text-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest">
+        <div className="absolute bottom-6 right-6 bg-black text-white px-3 py-1.5 text-xs font-black uppercase tracking-widest">
           {metadata.executionTimeMs}ms
         </div>
       )}
 
       {cached && (
-        <div className="absolute bottom-6 right-6 bg-red-600 text-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest">
+        <div className="absolute bottom-6 right-6 bg-red-600 text-white px-3 py-1.5 text-xs font-black uppercase tracking-widest">
           CACHED
         </div>
       )}

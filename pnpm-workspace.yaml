@@ -1,5 +1,7 @@
 packages:
   - 'apps/*'
-  - 'domains/*'
   - 'packages/*'
+  - 'domains/*'
   - 'core'
+
+shared-workspace-lockfile: true

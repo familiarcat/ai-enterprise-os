@@ -14,47 +14,40 @@ export const Billing = ({ usage }: BillingProps): JSX.Element => {
   // Instantiate the Domain Model to handle normalization and logic
   const model = new TokenUsage(usage || {});
 
-  const percentage = model.usagePercentage;
+  const percentage = model.usagePercentage || 0;
   const safePercentage = Math.min(Math.max(percentage, 0), 100);
 
   return (
-    <div className="bg-white text-black p-0 font-sans selection:bg-red-500 selection:text-white">
-      {/* Header Grid Section */}
-      <div className="grid grid-cols-12 border-b-2 border-black">
-        <div className="col-span-12 md:col-span-8 p-8 border-r-0 md:border-r-2 border-black">
-          <h1 className="text-6xl md:text-8xl font-black uppercase tracking-tighter leading-none">
-            Billing <br /> & Tokens
-          </h1>
-        </div>
-        <div className="col-span-12 md:col-span-4 p-8 flex flex-col justify-end">
-          <p className="text-sm font-bold uppercase tracking-widest">Project ID</p>
-          <p className="text-xl font-medium break-all">{model.projectId}</p>
-        </div>
+    <div className="bg-zinc-50 text-black font-sans selection:bg-red-500 selection:text-white border-2 border-black px-6 py-3 flex items-center justify-between gap-8">
+      {/* Compact Subheading Design */}
+      <div className="flex items-center gap-4">
+        <h2 className="text-sm font-black uppercase tracking-[0.2em] text-red-600 whitespace-nowrap">
+          00 / Billing & Tokens
+        </h2>
+        <div className="h-4 w-[1px] bg-black/20" />
+        <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">
+          Project: <span className="text-black">{model.projectId}</span>
+        </p>
       </div>
 
-      {/* Data Visualization Grid */}
-      <div className="grid grid-cols-12 min-h-[300px]">
-        <div className="col-span-12 md:col-span-4 p-8 border-b-2 md:border-b-0 md:border-r-2 border-black">
-          <p className="text-xs font-bold uppercase mb-12">01 / Consumption</p>
-          <div className="text-9xl font-black leading-none italic">
-            {Math.round(safePercentage)}%
-          </div>
+      <div className="flex-1 max-w-md flex items-center gap-4">
+        <div className="flex-1 bg-zinc-200 h-2 rounded-none overflow-hidden relative">
+          <div
+            className="bg-red-600 h-full transition-all duration-1000"
+            style={{ width: `${safePercentage}%` }}
+          />
         </div>
-        
-        <div className="col-span-12 md:col-span-8 p-8 flex flex-col justify-between bg-black text-white">
-          <p className="text-xs font-bold uppercase text-red-500">02 / Quota Statistics</p>
-          <div className="space-y-4">
-            <div className="flex justify-between items-baseline border-b border-zinc-800 pb-2">
-              <span className="uppercase text-sm font-bold">Total Tokens Processed</span>
-              <span className="text-4xl font-light">{model.formatUsage()}</span>
-            </div>
-            <div className="w-full bg-zinc-800 h-12 rounded-none overflow-hidden">
-              <div 
-                className="bg-red-600 h-full transition-all duration-1000" 
-                style={{ width: `${safePercentage}%` }} 
-              />
-            </div>
-          </div>
+        <span className="text-xs font-black italic">{Math.round(safePercentage)}%</span>
+      </div>
+
+      <div className="flex items-center gap-6">
+        <div className="text-right">
+          <span className="text-[10px] font-bold text-zinc-400 uppercase block leading-none">Processed</span>
+          <span className="text-sm font-black uppercase tracking-tighter leading-none">{model.formatUsage?.() || '0'}</span>
+        </div>
+        <div className="text-right">
+          <span className="text-[10px] font-bold text-zinc-400 uppercase block leading-none">Quota</span>
+          <span className="text-sm font-black uppercase tracking-tighter leading-none">{model.formatQuota?.() || 'N/A'}</span>
         </div>
       </div>
     </div>

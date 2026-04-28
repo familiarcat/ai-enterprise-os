@@ -66,6 +66,7 @@ The combined UI must support:
 │  10 Tools: search_code | run_factory_mission | run_batch_missions   │
 │            run_crew_agent | manage_{project,sprint,task}            │
 │            git_operation | health_check | get_versions_hierarchy    │
+│            gitmcp_search | integrate_mcp_tool                       │
 └──────────────────┬──────────────────────────────────────────────────┘
                    │ require('../core/orchestrator')
                    ▼
@@ -116,6 +117,7 @@ All 10 Star Trek personas are canonical agents. Each maps to a DDD role + OpenRo
 | `quark` | Quark | ANALYST | GPT_4O | varies |
 | `chief_obrien` | Chief O'Brien | DEVELOPER | GPT_4O | varies |
 | `lt_uhura` | Lt. Uhura | ANALYST | GEMINI_1_5_PRO | low |
+| `tasha_yar` | Tasha Yar | QA_AUDITOR | GEMINI_1_5_FLASH | low |
 
 **Canonical Mission Flow** (8 steps, in order):
 1. `captain_picard` — Decompose goal into task graph
@@ -139,9 +141,9 @@ Required in `~/.env` or `.env` at repo root:
 
 ```bash
 # Core (required for all phases)
-OPENROUTER_API_KEY=sk-or-...
-SUPABASE_URL=https://...supabase.co
-SUPABASE_KEY=eyJ...
+OPENROUTER_API_KEY=sk-or-v1-YOUR_KEY
+SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+SUPABASE_KEY=ey-YOUR_ANON_KEY
 REDIS_URL=redis://127.0.0.1:6379
 MCP_BRIDGE_PORT=3002
 PORT=3001
@@ -191,6 +193,11 @@ All 8 steps are production-ready. Run: `./scripts/p0-run-all.sh`
 | p0-s4 | `p0-s4-bridge-start.sh` | ✅ Full | Geordi |
 | p0-s5 | `p0-s5-dashboard-wire.sh` | ✅ Full | Lt. Uhura |
 | p0-s6 | `p0-s6-smoke-test.sh` | ✅ Full | Lt. Worf |
+| p0-s7 | `deploy-pre-flight.sh` | ✅ Full | Chief O'Brien |
+| p0-s8 | `seed-architecture.sh` | ✅ Full | Commander Data |
+| p0-s9 | `p0-s9-project-summary-seed.sh` | 🟢 NEW | Commander Data |
+| p0-s10 | `Python Documentation & Test Seed` | ✅ Full | Geordi La Forge |
+| p0-s11 | `Deployment Strategy Finalization` | ✅ Full | Captain Picard |
 
 **Blocker**: `openrouter-crew-platform` must be cloned to `~/Dev/` before p0-s5.
 ```bash
@@ -205,8 +212,9 @@ Run: `./scripts/p1-run-all.sh`
 | p1-s1 | `p1-s1-vscode-bootstrap.sh` | ⚠️ Partial | Scaffold `apps/vscode/` package.json + dirs |
 | p1-s2 | `p1-s2-mcp-client.sh` | 🔴 Stub | Implement MCPClient service (EventSource SSE) |
 | p1-s3 | `p1-s3-webview-port.sh` | 🔴 Stub | Port SovereignAgentViewport into WebView panel |
-| p1-s4 | `p1-s4-ext-commands.sh` | 🔴 Stub | Register 7 commands + status bar item |
-| p1-s5 | `p1-s5-vsce-package.sh` | 🔴 Stub | `vsce package` + local install |
+| p1-s4 | `p1-s4-ext-commands.sh` | ⚠️ Partial | Registered runMission and sensorSweep |
+| p1-s5 | `p1-s5-civic-bootstrap.sh` | 🟢 NEW | Bootstrap STL Civic Intelligence Domain |
+| p1-s6 | `p1-s6-vsce-package.sh` | 🔴 Stub | `vsce package` + local install |
 
 **What to build in `apps/vscode/`**:
 - `src/extension.ts` — activate(), register commands, create WebView panel
@@ -224,7 +232,8 @@ Merge `ai-enterprise-os` INTO `openrouter-crew-platform`. Use orc-p as base (bet
 | p2-s2 | Port `core/orchestrator.js` → `packages/orchestrator` (TypeScript) |
 | p2-s3 | Move `apps/api/mcp-http-bridge.mjs` → `packages/mcp-bridge` |
 | p2-s4 | Extract `CREW_PERSONAS` → `packages/crew-personas` (shared by ext + dashboard + bridge) |
-| p2-s5 | Wire Turbo pipeline: single `turbo run dev` starts everything |
+| p2-s5 | **Unified Language Initiative**: Port `unzip_search_tool` to TypeScript |
+| p2-s6 | Wire Turbo pipeline: single `turbo run dev` starts everything |
 
 ### Phase 3 — n8n + CrewAI Full Automation 🔴 PENDING
 
@@ -243,7 +252,8 @@ Merge `ai-enterprise-os` INTO `openrouter-crew-platform`. Use orc-p as base (bet
 | p4-s1 | Multi-stage Docker build (Node 20 + Python 3.11) |
 | p4-s2 | `terraform plan` — AWS ECS + ElastiCache + Lambda (reuse orc-p Terraform) |
 | p4-s3 | Vercel deploy — alex-dashboard (zero-config Next.js) |
-| p4-s4 | AWS deploy — ECS Fargate (engine-api + mcp-bridge) |
+| p4-s4 | AWS deploy — ECS Fargate (engine-api + mcp-bridge) via orc-p scripts |
+| p4-s4b| DNS Route53 — Dynamic subdomain routing (e.g., civic.pbradygeorgen.com) |
 | p4-s5 | `vsce publish` — VSCode marketplace (publisher: familiarcat) |
 
 ---
@@ -466,6 +476,10 @@ npx vitest run core/orchestrator.test.js
 
 # Integration smoke test (requires bridge running)
 ./scripts/p0-s6-smoke-test.sh
+
+# Python tool tests (pytest)
+source .venv/bin/activate
+pytest tools/tests/
 
 # Memory retrieval test
 node scripts/test-memory-retrieval.js

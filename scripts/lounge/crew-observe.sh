@@ -36,12 +36,13 @@ _orc_memories() {
 }
 
 crew_observe() {
-  local member="" role="" title="" summary=""
+  local member="" role="" title="" summary="" category="general"
   local findings=() conclusions=() recommendations=() tags=""
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --member)     member="$2";                      shift 2 ;;
+      --category)   category="$2";                    shift 2 ;;
       --role)       role="$2";                        shift 2 ;;
       --title)      title="$2";                       shift 2 ;;
       --summary)    summary="$2";                     shift 2 ;;
@@ -99,6 +100,7 @@ crew_observe() {
   "conclusions": $(_json_arr "${conclusions[@]}"),
   "recommendations": $(_json_arr "${recommendations[@]}"),
   "tags": $(_json_tags),
+  "category": "$category",
   "timestamp": "$iso"
 }
 EOF

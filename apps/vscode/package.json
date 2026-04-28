@@ -1,0 +1,60 @@
+{
+  "name": "sovereign-factory",
+  "displayName": "Sovereign Factory",
+  "description": "AI Enterprise OS — Star Trek crew agents in your editor",
+  "version": "0.1.0",
+  "publisher": "familiarcat",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "AI",
+    "Programming Languages",
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "sovereign.runMission",
+        "title": "Sovereign: Run Factory Mission",
+        "category": "Sovereign"
+      },
+      {
+        "command": "sovereign.sensorSweep",
+        "title": "Sovereign: Sensors Sweep (System State)",
+        "category": "Sovereign"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "sovereignCrew",
+          "name": "Sovereign Crew",
+          "type": "webview"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.6.0",
+    "eventsource-parser": "^1.1.2"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.3",
+    "@vscode/vsce": "^2.24.0"
+  }
+}

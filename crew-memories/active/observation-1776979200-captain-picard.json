@@ -1,0 +1,15 @@
+{
+  "type": "observation",
+  "crew_member": "Captain Picard",
+  "role": "Captain, USS Enterprise-D",
+  "title": "Structural Alignment & Credential Integrity Resolution",
+  "summary": "Resolved DDD violations regarding UI placement and hardened the credential dual-sync protocol between ~/.zshrc and .env.",
+  "key_findings": [
+    "CivicDashboard.tsx was incorrectly placed in a script directory; relocated to domains/civic/ui/.",
+    "Duplicate keys in secrets-sync and setup_credentials scripts were causing configuration drift.",
+    "Dual-sync protocol now ensures that derived shell credentials are immediately mirrored to the project environment."
+  ],
+  "conclusions": ["Architectural integrity restored. The system is now nominal for Phase 1 testing."],
+  "recommendations": ["Execute deploy-end-to-end.sh to verify full pipeline health."],
+  "timestamp": "2026-04-22T15:00:00.000Z"
+}

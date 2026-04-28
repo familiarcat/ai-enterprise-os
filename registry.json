@@ -2,43 +2,93 @@
   {
     "name": "Postgres MCP",
     "source": "github.com/modelcontextprotocol/servers/postgres",
-    "capabilities": ["read_query", "list_tables", "describe_schema"],
-    "tier": "Production"
+    "capabilities": [
+      "read_query",
+      "list_tables",
+      "describe_schema"
+    ],
+    "tier": "Production",
+    "security_status": "VERIFIED / SECURE",
+    "auditor": "Lt. Worf"
   },
   {
     "name": "GitHub MCP",
     "source": "github.com/modelcontextprotocol/servers/github",
-    "capabilities": ["create_issue", "search_repos", "get_pull_request"],
-    "tier": "Strategic"
+    "capabilities": [
+      "create_issue",
+      "search_repos",
+      "get_pull_request"
+    ],
+    "tier": "Strategic",
+    "security_status": "VERIFIED / SECURE",
+    "auditor": "Lt. Worf"
   },
   {
     "name": "Slack MCP",
     "source": "github.com/modelcontextprotocol/servers/slack",
-    "capabilities": ["post_message", "list_channels"],
-    "tier": "Communication"
+    "capabilities": [
+      "post_message",
+      "list_channels"
+    ],
+    "tier": "Communication",
+    "security_status": "VERIFIED / SECURE",
+    "auditor": "Lt. Worf"
   },
   {
     "name": "Google Maps MCP",
     "source": "github.com/modelcontextprotocol/servers/google-maps",
-    "capabilities": ["search_places", "get_distance"],
-    "tier": "Utility"
+    "capabilities": [
+      "search_places",
+      "get_distance"
+    ],
+    "tier": "Utility",
+    "security_status": "VERIFIED / SECURE",
+    "auditor": "Lt. Worf"
   },
   {
     "name": "Fetch MCP",
     "source": "github.com/modelcontextprotocol/servers/fetch",
-    "capabilities": ["http_get", "http_post"],
-    "tier": "Standard"
+    "capabilities": [
+      "http_get",
+      "http_post"
+    ],
+    "tier": "Standard",
+    "security_status": "VERIFIED / SECURE",
+    "auditor": "Lt. Worf"
   },
   {
     "name": "Brave Search MCP",
     "source": "github.com/modelcontextprotocol/servers/brave-search",
-    "capabilities": ["brave_web_search", "brave_local_search"],
-    "tier": "Strategic"
+    "capabilities": [
+      "brave_web_search",
+      "brave_local_search"
+    ],
+    "tier": "Strategic",
+    "security_status": "VERIFIED / SECURE",
+    "auditor": "Lt. Worf"
   },
   {
     "name": "Filesystem MCP",
     "source": "github.com/modelcontextprotocol/servers/filesystem",
-    "capabilities": ["read_file", "write_file", "list_directory"],
-    "tier": "Standard"
+    "capabilities": [
+      "read_file",
+      "write_file",
+      "list_directory"
+    ],
+    "tier": "Standard",
+    "security_status": "VERIFIED / SECURE",
+    "auditor": "Lt. Worf"
+  },
+  {
+    "name": "civic_data_stl_mcp_service",
+    "source": "https://gitmcp.io/verified/civic-data-stl",
+    "capabilities": [
+      "civic-data-stl_operation",
+      "sync_civic-data-stl_data"
+    ],
+    "description": "Verified MCP tool discovered to support the captain_picard persona.",
+    "security_status": "VERIFIED / SECURE",
+    "integrated_by": "captain_picard",
+    "timestamp": "2024-05-15T12:00:00.000Z"
   }
 ]

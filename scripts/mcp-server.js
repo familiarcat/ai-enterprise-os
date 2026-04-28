@@ -167,7 +167,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
-  if ((name === "run_factory_mission" || name === "run_batch_missions") && !process.env.OPENROUTER_API_KEY) {
+  if ((name === "run_factory_mission" || name === "run_batch_missions" || name === "run_crew_agent") && !process.env.OPENROUTER_API_KEY) {
     return {
       isError: true,
       content: [{ type: "text", text: "Error: OPENROUTER_API_KEY environment variable is not set on the MCP server." }]

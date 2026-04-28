@@ -45,4 +45,8 @@ export class TokenUsage {
   public formatUsage(): string {
     return new Intl.NumberFormat('en-US').format(this.tokensUsed || 0);
   }
+
+  public formatQuota(): string {
+    return new Intl.NumberFormat('en-US').format(this.quotaLimit || 0);
+  }
 }
