@@ -1,170 +1,100 @@
-import * as v from 'vscode';
-import { MCPClient as Cl } from './services/MCPClient';
-import { AgentViewportPanel as Avp } from './views/AgentViewportPanel';
-import { executeRunMission as run } from './commands/runMission';
+import * as vscode from 'vscode';
+import { getMCPClient, MCPClient } from './services/MCPClient';
+import { executeRunMission } from './commands/mission';
+import { executeSensorSweep } from './commands/sensorSweep';
+import { executeHealthCheck } from './commands/healthCheck';
+import { AgentViewportPanel } from './views/AgentViewportPanel'; // Import the new panel class
 
-let c: Cl, sb: v.StatusBarItem, oc: v.OutputChannel;
-export const getMCPClient = () => { if (!c) throw '!c'; return c; };
+export function activate(context: vscode.ExtensionContext) {
+    console.log('Sovereign Factory Extension is now active.');
 
-export async function activate(ctx: v.ExtensionContext) {
-  oc = v.window.createOutputChannel('Sovereign');
-  ctx.subscriptions.push(oc);
-  oc.appendLine('Activating...');
+    // Register commands defined in package.json
+    let runMission = vscode.commands.registerCommand('sovereign.runMission', () => executeRunMission(context));
+    let sensorSweep = vscode.commands.registerCommand('sovereign.sensorSweep', () => executeSensorSweep());
+    let healthCheck = vscode.commands.registerCommand('sovereign.healthCheck', () => executeHealthCheck());
+    let checkBridgeStatus = vscode.commands.registerCommand('sovereign.checkBridgeStatus', () => getMCPClient().logStatus());
 
-  // ── Status bar ─────────────────────────────────────────────────────────────
-  sb = v.window.createStatusBarItem(v.StatusBarAlignment.Right, 100);
-  sb.command = 'sovereign.healthCheck';
-  updateStatusBar('connecting');
-  sb.show();
-  ctx.subscriptions.push(sb);
+    context.subscriptions.push(runMission, sensorSweep, healthCheck, checkBridgeStatus);
 
-  // ── MCP Client ─────────────────────────────────────────────────────────────
-  const cfg = v.workspace.getConfiguration('sovereign');
-  c = new Cl(cfg.get<string>('mcpUrl') || 'http://localhost:3002', oc);
-  c.onDisconnect(() => updateStatusBar('disconnected'));
-
-  if (cfg.get<boolean>('autoConnect') ?? true) {
-    await connectMCP();
-  }
-
-  // ── Commands ───────────────────────────────────────────────────────────────
-  ctx.subscriptions.push(
-    v.commands.registerCommand('sovereign.runMission', () => run(ctx)),
-
-    v.commands.registerCommand('sovereign.assignCrew', async () => {
-      if (!assertConnected()) return;
-      const personas = await c.getPersonas();
-      const items = Object.entries(personas).map(([key, p]) => ({
-        label: key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-        description: p.role,
-        detail: `Model: ${p.model}`,
-        key,
-      }));
-      const picked = await v.window.showQuickPick(items, {
-        title: 'Assign Crew Member',
-        placeHolder: 'Select a Star Trek crew persona',
-      });
-      if (!picked) return;
-      await v.workspace.getConfiguration('sovereign').update(
-        'defaultPersona', picked.key, v.ConfigurationTarget.Workspace
-      );
-      updateStatusBar('connected', picked.label);
-      v.window.showInformationMessage(`Crew: ${picked.label}`);
-    }),
-
-    v.commands.registerCommand('sovereign.searchCode', async () => {
-      if (!assertConnected()) return;
-      const fnName = await v.window.showInputBox({ prompt: 'Name to search' });
-      if (!fnName) return;
-      const ws = v.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '.';
-      const res = await c.searchCode(ws, fnName);
-      oc.show();
-      oc.appendLine(`\n── Search: ${fnName} ──`);
-      oc.appendLine(res.content.map((c) => c.text).join('\n'));
-    }),
-
-    v.commands.registerCommand('sovereign.scaffoldDomain', async () => {
-      if (!assertConnected()) return;
-      const domain = await v.window.showInputBox({
-        prompt: 'DDD domain name (e.g. user-auth, payments)',
-        placeHolder: 'my-domain',
-      });
-      if (!domain) return;
-      const ws = v.workspace.workspaceFolders?.[0]?.name ?? 'sovereign';
-      const result = await c.runMission(ws,
-        `Scaffold domain "${domain}"`
-      );
-      oc.show();
-      oc.appendLine(result.content.map((c: any) => c.text).join('\n'));
-    }),
-
-    v.commands.registerCommand('sovereign.healthCheck', async () => {
-      if (!c) {
-        await connectMCP();
-        return;
-      }
-      updateStatusBar('checking');
-      try {
-        const result = await c.callTool('health_check', {});
-        const text = result.content.map((c: any) => c.text).join('\n');
-        oc.appendLine('\n── Health Check ──\n' + text);
-        updateStatusBar('connected');
-        v.window.showInformationMessage('Sovereign: all systems nominal');
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        updateStatusBar('error');
-        v.window.showErrorMessage('Health check failed: ' + msg);
-      }
-    }),
-
-    v.commands.registerCommand('sovereign.gitOperation', async () => {
-      if (!assertConnected()) return;
-      const action = await v.window.showQuickPick(['commit', 'push', 'status'], {
-        title: 'Git Operation',
-      });
-      if (!action) return;
-      let message: string | undefined;
-      if (action === 'commit') {
-        message = await v.window.showInputBox({ prompt: 'Commit message' });
-        if (!message) return;
-      }
-      const result = await c.callTool('git_operation', { action, message });
-      oc.show();
-      oc.appendLine(result.content.map((c: any) => c.text).join('\n'));
-    }),
-
-    v.commands.registerCommand('sovereign.openDashboard', async () => {
-      const cfg = v.workspace.getConfiguration('sovereign');
-      const mcpUrl = cfg.get<string>('mcpUrl') ?? 'http://localhost:3002';
-      const dashUrl = mcpUrl.replace(':3002', ':3000');
-      await v.env.openExternal(v.Uri.parse(dashUrl));
-    }),
-  );
-
-  oc.appendLine('Sovereign Factory activated.');
-}
-
-async function connectMCP() {
-  if (!c) return;
-  updateStatusBar('connecting');
-  try {
-    await c.connect();
-    updateStatusBar('connected');
-    oc.appendLine(`Connected to MCP bridge.`);
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    updateStatusBar('error');
-    oc.appendLine('[ERROR] MCP connect failed: ' + msg);
-    v.window.showWarningMessage(
-      `Sovereign: MCP bridge unreachable (${msg}). Start mcp-http-bridge.mjs first.`
+    // Webview View Provider for the Agent Viewport
+    const provider = new SovereignAgentViewProvider(context.extensionUri, getMCPClient());
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider('sovereign.agentViewport', provider)
     );
-  }
 }
 
-function assertConnected(): boolean {
-  if (!c) {
-    v.window.showWarningMessage('Sovereign: not connected to MCP bridge. Run "Sovereign: Health Check" to connect.');
-    return false;
-  }
-  return true;
+class SovereignAgentViewProvider implements vscode.WebviewViewProvider {
+    private _webview?: vscode.Webview; // Store webview reference
+    private _mcpClient: MCPClient;
+
+    constructor(private readonly _extensionUri: vscode.Uri, mcpClient: MCPClient) {
+        this._mcpClient = mcpClient;
+    }
+
+    public resolveWebviewView(
+        webviewView: vscode.WebviewView,
+        _context: vscode.WebviewViewResolveContext,
+        _token: vscode.CancellationToken,
+    ) {
+        this._webview = webviewView.webview; // Store reference
+        webviewView.webview.options = {
+            enableScripts: true,
+            localResourceRoots: [this._extensionUri]
+        };
+
+        webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+
+        // Listen for progress events from MCPClient and forward to webview
+        this._mcpClient.onProgress((message: string) => {
+            this._webview?.postMessage({ command: 'progress', message });
+        }, null, []);
+
+        // Handle messages from the webview
+        webviewView.webview.onDidReceiveMessage((message: any) => {
+            switch (message.command) {
+                case 'alert':
+                    vscode.window.showErrorMessage(message.text);
+                    return;
+                case 'mcpCall':
+                    this._mcpClient.callTool(message.toolName, message.args)
+                        .then((result: any) => webviewView.webview.postMessage({ command: 'mcpResult', result }))
+                        .catch((error: any) => webviewView.webview.postMessage({ command: 'mcpError', error: error.message }));
+                    return;
+            }
+        }, undefined, []);
+    }
+
+    private _getHtmlForWebview(webview: vscode.Webview) {
+        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'main.js'));
+        const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'main.css')); // Assuming a CSS bundle too
+
+        // Use a nonce to only allow a specific script to be run.
+        const nonce = getNonce();
+
+        return `<!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https:; script-src 'nonce-${nonce}';">
+            <link href="${styleUri}" rel="stylesheet">
+            <title>Sovereign Agent Viewport</title>
+        </head>
+        <body>
+            <div id="root"></div>
+            <script nonce="${nonce}" src="${scriptUri}"></script>
+        </body>
+        </html>`;
+    }
 }
 
-type StatusState = 'connecting' | 'connected' | 'disconnected' | 'checking' | 'error';
-function updateStatusBar(state: StatusState, persona?: string) {
-  const icons: Record<StatusState, string> = {
-    connecting:   '$(loading~spin)',
-    connected:    '$(plug)',
-    disconnected: '$(debug-disconnect)',
-    checking:     '$(search)',
-    error:        '$(error)',
-  };
-  const label = persona ? ` ${persona}` : '';
-  statusBarItem.text = `${icons[state]} Sovereign${label}`;
-  statusBarItem.tooltip = state === 'connected'
-    ? `Sovereign Factory — MCP bridge connected${persona ? ' · ' + persona : ''}`
-    : `Sovereign Factory — ${state}`;
+function getNonce() {
+    let text = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 32; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
 }
 
-export function deactivate() {
-  c?.disconnect();
-}
+export function deactivate() {}

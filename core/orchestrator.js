@@ -138,6 +138,8 @@ const WORF_EXCLUSIONS = [
   'scripts/project analysis/',
   'scripts/remediation/',
   'scripts/PROJECT_ANALYSIS.md',
+  'scripts/remediate-analysis.sh',
+  'AI_ENTERPRISE_OS_ANALYSIS.md',
   'CLAUDE.md',
   'README.md',
   'PLATFORM_CONSTITUTION.md'

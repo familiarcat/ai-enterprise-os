@@ -1,42 +1,14 @@
 /**
  * MCPClient.ts — Sovereign Factory VSCode Extension
  *
- * Implements the MCP client over HTTP/SSE transport, matching the protocol
+ * Implements the MCP client over Node.js http transport, matching the protocol
  * exposed by apps/api/mcp-http-bridge.mjs.
  */
 import * as vscode from 'vscode';
 import * as http from 'http';
-import { EventEmitter } from 'events';
+import { URL } from 'url';
 
-/** Internal types for SSE parsing to avoid external dependencies */
-interface ParsedEvent {
-    type: 'event';
-    data: string;
-}
-interface ReconnectInterval {
-    type: 'reconnect-interval';
-    value: number;
-}
-
-/** Simple inline SSE parser to handle bridge notifications */
-function createParser(onEvent: (event: ParsedEvent | ReconnectInterval) => void) {
-    let buffer = '';
-    return {
-        feed(chunk: string) {
-            buffer += chunk;
-            const messages = buffer.split(/\r?\n\r?\n/);
-            buffer = messages.pop() || '';
-            for (const message of messages) {
-                const dataMatch = message.match(/^data:\s*(.+)$/m);
-                if (dataMatch) {
-                    onEvent({ type: 'event', data: dataMatch[1].trim() });
-                }
-            }
-        }
-    };
-}
-
-export class MCPClient extends EventEmitter {
+export class MCPClient {
     private static instance: MCPClient;
     private sessionId: string | null = null;
     private bridgeUrl: string;
@@ -46,11 +18,30 @@ export class MCPClient extends EventEmitter {
     private sseRequest: http.ClientRequest | null = null;
     private sseResponse: http.IncomingMessage | null = null;
 
+    private _onProgress = new vscode.EventEmitter<string>();
+    private _onDisconnect = new vscode.EventEmitter<void>();
+
+    public readonly onProgress = this._onProgress.event;
+    public readonly onDisconnect = this._onDisconnect.event;
+
     private constructor() {
-        super();
         const config = vscode.workspace.getConfiguration('sovereign');
         this.bridgeUrl = config.get<string>('mcpBridgeUrl') || 'http://localhost:3002';
         this.outputChannel = vscode.window.createOutputChannel('Sovereign Factory');
+        this.outputChannel.appendLine(`[Init] MCP Bridge Client initialized with URL: ${this.bridgeUrl}`);
+
+        // Listen for configuration changes to update bridgeUrl dynamically
+        vscode.workspace.onDidChangeConfiguration(e => {
+            if (e.affectsConfiguration('sovereign.mcpBridgeUrl')) {
+                const newConfig = vscode.workspace.getConfiguration('sovereign');
+                const newBridgeUrl = newConfig.get<string>('mcpBridgeUrl') || 'http://localhost:3002';
+                if (this.bridgeUrl !== newBridgeUrl) {
+                    this.outputChannel.appendLine(`[Config] MCP Bridge URL changed from ${this.bridgeUrl} to ${newBridgeUrl}.`);
+                    this.bridgeUrl = newBridgeUrl;
+                    this.disconnect(); // Disconnect existing session to force re-establishment with new URL
+                }
+            }
+        });
     }
 
     public static getInstance(): MCPClient {
@@ -60,29 +51,50 @@ export class MCPClient extends EventEmitter {
         return MCPClient.instance;
     }
 
+    public get isConnected(): boolean {
+        return !!this.sessionId;
+    }
+
+    /**
+     * Reveals the output channel and prints the current bridge connection status.
+     * Useful for diagnostics without triggering a full tool-based health check.
+     */
+    public logStatus(): void {
+        this.outputChannel.show();
+        this.outputChannel.appendLine(`\n[Status] --- Sovereign Bridge Diagnostics ---`);
+        this.outputChannel.appendLine(`[Status] Target URL: ${this.bridgeUrl}`);
+        this.outputChannel.appendLine(`[Status] Connection: ${this.sessionId ? 'CONNECTED' : 'DISCONNECTED'}`);
+        if (this.sessionId) {
+            this.outputChannel.appendLine(`[Status] Active Session: ${this.sessionId}`);
+        }
+        this.outputChannel.appendLine(`[Status] ------------------------------------\n`);
+    }
+
     public async callTool(name: string, args: Record<string, any>): Promise<any> {
         const sessId = await this.ensureSession();
         this.outputChannel.appendLine(`[MCP] Calling tool: ${name}`);
-        this.outputChannel.show(true);
 
-        const url = new URL(`${this.bridgeUrl}/messages?sessionId=${sessId}`);
-        const body = JSON.stringify({
-            jsonrpc: "2.0",
+        const payload = {
+            jsonrpc: '2.0',
             id: Date.now(),
-            method: "tools/call",
-            params: { name, arguments: args }
-        });
+            method: 'tools/call',
+            params: { name, arguments: args },
+        };
+        const body = JSON.stringify(payload);
 
         return new Promise((resolve, reject) => {
-            const req = http.request(url, {
+            const url = new URL(`${this.bridgeUrl}/messages?sessionId=${sessId}`);
+            const options = {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Content-Length': Buffer.byteLength(body)
                 }
-            }, (res) => {
+            };
+
+            const req = http.request(url, options, (res) => {
                 let data = '';
-                res.on('data', (chunk: Buffer) => data += chunk.toString());
+                res.on('data', (chunk: any) => data += chunk.toString());
                 res.on('end', () => {
                     try {
                         const parsed = JSON.parse(data);
@@ -90,21 +102,15 @@ export class MCPClient extends EventEmitter {
                             this.outputChannel.appendLine(`[MCP] Tool error: ${parsed.error.message}`);
                             reject(new Error(parsed.error.message));
                         } else {
-                            this.outputChannel.appendLine(`[MCP] Tool response received.`);
                             resolve(parsed.result);
                         }
-                    } catch (err: unknown) {
-                        const e = err as Error;
-                        const errorMessage = e.message || String(e);
-                        reject(new Error(`Failed to parse response: ${data}. Error: ${errorMessage}`));
+                    } catch (e) {
+                        reject(new Error(`Failed to parse response: ${data}`));
                     }
                 });
             });
 
-            req.on('error', (e: Error) => {
-                this.outputChannel.appendLine(`[MCP] Tool request error: ${e.message}`);
-                reject(e);
-            });
+            req.on('error', (e) => reject(e));
             req.write(body);
             req.end();
         });
@@ -121,57 +127,49 @@ export class MCPClient extends EventEmitter {
         this.isConnecting = true;
         this.outputChannel.appendLine(`[MCP] Connecting to SSE at ${this.bridgeUrl}/sse...`);
 
-        const promise = new Promise<string>((resolve, reject) => {
+        this.connectionPromise = new Promise<string>((resolve, reject) => {
             const timeout = setTimeout(() => {
                 this.disconnect();
                 reject(new Error('SSE session timeout after 5000ms'));
             }, 5000);
 
-            this.sseRequest = http.get(`${this.bridgeUrl}/sse`, { headers: { 'Accept': 'text/event-stream' } }, (res: http.IncomingMessage) => {
+            this.sseRequest = http.get(`${this.bridgeUrl}/sse`, { headers: { 'Accept': 'text/event-stream' } }, (res) => {
                 this.sseResponse = res;
+                let buffer = '';
 
-                const parser = createParser((event: ParsedEvent | ReconnectInterval) => {
-                    if (event.type === 'event') {
-                        const rawData = event.data;
-                        
-                        // Attempt to extract sessionId if not already established
-                        if (!this.sessionId) {
+                res.on('data', (chunk: any) => {
+                    buffer += chunk.toString();
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const rawData = line.substring(6).trim();
                             const sessionMatch = rawData.match(/sessionId=([^&"\s\r\n]+)/);
                             if (sessionMatch) {
-                                const id = sessionMatch[1];
                                 clearTimeout(timeout);
-                                this.sessionId = id;
+                                this.sessionId = sessionMatch[1];
                                 this.outputChannel.appendLine(`[MCP] Session ID established: ${this.sessionId}`);
                                 this.isConnecting = false;
                                 this.connectionPromise = null;
-                                resolve(id);
+                                resolve(this.sessionId);
+                            } else {
+                                // Stream all other SSE data events as progress to the viewport
+                                this._onProgress.fire(rawData);
                             }
-                        }
-
-                        // Parse and emit progress notifications
-                        if (rawData.startsWith('{')) {
-                            try {
-                                const json = JSON.parse(rawData);
-                                if (json.method === 'notifications/progress') {
-                                    this.emit('progress', json.params.message);
-                                }
-                            } catch (e) { /* ignore non-JSON events like endpoint announcements */ }
                         }
                     }
                 });
 
-                res.on('data', (chunk: Buffer) => {
-                    parser.feed(chunk.toString());
-                });
-
                 res.on('end', () => this.disconnect());
-                res.on('error', (e: Error) => {
-                    this.outputChannel.appendLine(`[MCP] SSE error: ${e.message}`);
+
+                res.on('error', (e) => {
+                    this.outputChannel.appendLine(`[MCP] SSE Response error: ${e.message}`);
                     this.disconnect();
                 });
             });
 
-            this.sseRequest.on('error', (e: Error) => {
+            this.sseRequest.on('error', (e) => {
                 clearTimeout(timeout);
                 this.isConnecting = false;
                 this.connectionPromise = null;
@@ -179,8 +177,7 @@ export class MCPClient extends EventEmitter {
             });
         });
 
-        this.connectionPromise = promise;
-        return promise;
+        return this.connectionPromise;
     }
 
     public disconnect(): void {
@@ -191,6 +188,7 @@ export class MCPClient extends EventEmitter {
         this.sessionId = null;
         this.isConnecting = false;
         this.connectionPromise = null;
+        this._onDisconnect.fire();
         this.outputChannel.appendLine('[MCP] Disconnected.');
     }
 }

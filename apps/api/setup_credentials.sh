@@ -3,7 +3,7 @@
 # This script ensures your local environment has the required keys and paths.
 
 ZSHRC="$HOME/.zshrc"
-PROJECT_PATH="/Users/bradygeorgen/Dev/ai-enterprise-os"
+PROJECT_PATH="$(cd "$(dirname "$0")/../.." && pwd)"
 
 echo "--- Unifying AI Enterprise OS Credentials ---"
 
@@ -19,6 +19,13 @@ validate_credential() {
             return 0
         else
             echo "❌ Invalid OpenRouter API Key (HTTP Status: $status)"
+            return 1
+        fi
+    fi
+    if [[ "$name" == "SUPABASE_KEY" ]]; then
+        if [[ ! "$value" =~ ^eyJ ]]; then
+            echo "❌ Invalid Supabase Key format."
+            echo "   Expected a JWT starting with 'eyJ' (Anon or Service Role key)."
             return 1
         fi
     fi
@@ -81,5 +88,5 @@ if git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
     fi
 fi
 
-echo "🚀 Refreshing your shell session to apply changes..."
-exec zsh
+echo "✅ Credentials verified. Run 'source ~/.zshrc' to apply changes to your current session."
+echo "--- Local Setup Done. ---"
