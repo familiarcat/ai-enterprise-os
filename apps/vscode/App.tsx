@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Terminal, Shield, Cpu, Activity, Trash2, Wifi, WifiOff, RefreshCw, Settings, ArrowUp, Info } from 'lucide-react';
+import { Terminal, Shield, Cpu, Activity, Trash2, Wifi, WifiOff, RefreshCw, Settings, ArrowUp, Info, Download } from 'lucide-react';
 
 declare const acquireVsCodeApi: () => any;
 const vscode = acquireVsCodeApi();
@@ -47,11 +47,26 @@ const App: React.FC = () => {
                 }
             }
 
+            // Standardize text extraction for structured results and progress strings
+            let text = message.message || message.text || "";
+            
+            if (message.result) {
+                if (typeof message.result === 'string') {
+                    text = message.result;
+                } else if (message.result.content && Array.isArray(message.result.content)) {
+                    // Handle standard MCP structured content response
+                    text = message.result.content.map((c: any) => c.text).join('\n');
+                } else {
+                    // Fallback for custom or complex result objects
+                    text = JSON.stringify(message.result, null, 2);
+                }
+            }
+
             // Process standard logs
             const newEntry: LogEntry = {
                 id: Date.now(),
                 timestamp: new Date().toLocaleTimeString(),
-                text: message.message || message.text || JSON.stringify(message.result),
+                text: text,
                 type: message.command === 'progress' ? 'progress' : 'log'
             };
 
@@ -105,6 +120,25 @@ const App: React.FC = () => {
         vscode.postMessage({ command: 'mcpCall', toolName: 'health_check', args: {}, silent: true });
     };
 
+    const exportLogs = () => {
+        if (logs.length === 0) {
+            vscode.postMessage({ command: 'alert', text: 'No logs to export.' });
+            return;
+        }
+
+        const markdownContent = logs.map(log => {
+            const typeIcon = log.type === 'error' ? '❌' : log.type === 'progress' ? '⚙️' : '💬';
+            return `### ${typeIcon} ${log.type.toUpperCase()} [${log.timestamp}]\n\n\`\`\`\n${log.text}\n\`\`\`\n`;
+        }).join('\n---\n\n');
+
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        vscode.postMessage({ 
+            command: 'exportLogs', 
+            content: markdownContent,
+            defaultFilename: `sovereign-mission-log-${timestamp}.md`
+        });
+    };
+
     const scrollToTop = () => {
         containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -119,6 +153,9 @@ const App: React.FC = () => {
                 <div className="header-right">
                     <button onClick={checkStatus} className="diag-btn" title="Check Bridge Status">
                         <Info size={14} />
+                    </button>
+                    <button onClick={exportLogs} className="export-btn" title="Export Logs">
+                        <Download size={14} />
                     </button>
                     <button onClick={openSettings} className="settings-btn" title="Open Settings">
                         <Settings size={14} />

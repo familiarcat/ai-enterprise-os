@@ -64,6 +64,24 @@ class SovereignAgentViewProvider implements vscode.WebviewViewProvider {
                 case 'checkStatus':
                     this._mcpClient.logStatus();
                     return;
+                case 'exportLogs':
+                    vscode.window.showSaveDialog({
+                        defaultUri: vscode.Uri.file(message.defaultFilename),
+                        filters: {
+                            'Markdown': ['md']
+                        }
+                    }).then(fileUri => {
+                        if (fileUri) {
+                            vscode.workspace.fs.writeFile(fileUri, Buffer.from(message.content, 'utf8'))
+                                .then(() => {
+                                    vscode.window.showInformationMessage(`Logs exported to ${fileUri.fsPath}`);
+                                })
+                                .catch(err => {
+                                    vscode.window.showErrorMessage(`Failed to export logs: ${err.message}`);
+                                });
+                        }
+                    });
+                    return;
                 case 'mcpCall':
                     this._mcpClient.callTool(message.toolName, message.args)
                         .then((result: any) => webviewView.webview.postMessage({ command: 'mcpResult', result, toolName: message.toolName, silent: message.silent }))

@@ -70,7 +70,7 @@ if ! pnpm exec vsce package --no-dependencies --allow-missing-repository -o "$VS
         "chief_obrien" \
         "run_crew_agent" \
         '{"objective": "Resolve VSCE packaging error"}' \
-        "$(cat /tmp/vsce-build.log)"
+        "Check terminal output above for VSCE failure details."
 fi
 
 # ── 4b. Verification ─────────────────────────────────────────────────────────

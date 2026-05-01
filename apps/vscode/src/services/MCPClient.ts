@@ -107,7 +107,7 @@ export class MCPClient {
                             resolve(parsed.result);
                         }
                     } catch (e) {
-                        reject(new Error(`Failed to parse response: ${data}`));
+                        reject(new Error(`Failed to parse response for tool ${name}: ${data}. Error: ${e.message}`));
                     }
                 });
             });
@@ -118,8 +118,18 @@ export class MCPClient {
         });
     }
 
-    public async runMission(project: string, objective: string, persona: string = 'captain_picard'): Promise<any> {
-        return this.callTool('run_factory_mission', { project, objective, persona });
+    public async runMission(project: string, objective: string, persona: string = 'captain_picard', workspaceName?: string, activeFile?: string): Promise<any> {
+        const context = {
+            sessionId: `vscode-${Date.now()}`,
+            persona,
+            objective,
+            metadata: { 
+                project,
+                workspaceName: workspaceName || project,
+                activeFile
+            }
+        };
+        return this.callTool('run_factory_mission', { context });
     }
 
     private async ensureSession(): Promise<string> {
@@ -156,8 +166,20 @@ export class MCPClient {
                                 this.connectionPromise = null;
                                 resolve(this.sessionId);
                             } else {
-                                // Stream all other SSE data events as progress to the viewport
-                                this._onProgress.fire(rawData);
+                                try {
+                                    const json = JSON.parse(rawData);
+                                    // Parse structured notifications from the bridge (e.g. batch missions or deploy status)
+                                    if (json.method === 'notifications/message' && json.params?.data) {
+                                        this._onProgress.fire(json.params.data);
+                                    } else if (json.method === 'notifications/progress' && json.params?.message) {
+                                        this._onProgress.fire(json.params.message);
+                                    } else {
+                                        this._onProgress.fire(rawData);
+                                    }
+                                } catch (e) {
+                                    // Fallback to raw string if it's not valid JSON
+                                    this._onProgress.fire(rawData);
+                                }
                             }
                         }
                     }

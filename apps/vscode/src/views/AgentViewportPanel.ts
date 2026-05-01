@@ -70,6 +70,24 @@ export class AgentViewportPanel {
                     case 'openSettings':
                         vscode.commands.executeCommand('workbench.action.openSettings', 'sovereign');
                         return;
+                    case 'exportLogs':
+                        vscode.window.showSaveDialog({
+                            defaultUri: vscode.Uri.file(message.defaultFilename),
+                            filters: {
+                                'Markdown': ['md']
+                            }
+                        }).then(fileUri => {
+                            if (fileUri) {
+                                vscode.workspace.fs.writeFile(fileUri, Buffer.from(message.content, 'utf8'))
+                                    .then(() => {
+                                        vscode.window.showInformationMessage(`Logs exported to ${fileUri.fsPath}`);
+                                    })
+                                    .catch(err => {
+                                        vscode.window.showErrorMessage(`Failed to export logs: ${err.message}`);
+                                    });
+                            }
+                        });
+                        return;
                     case 'checkStatus':
                         this._mcpClient.logStatus();
                         return;

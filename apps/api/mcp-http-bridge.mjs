@@ -114,7 +114,13 @@ const TOOL_LIST = [
   {
     name: 'run_factory_mission',
     description: 'Trigger a full mission to analyse evolution and scaffold new DDD domains',
-    inputSchema: { type: 'object', properties: { project: { type: 'string' }, objective: { type: 'string' }, persona: { type: 'string' } }, required: ['project', 'objective'] },
+    inputSchema: { 
+      type: 'object', 
+      properties: { 
+        context: { type: 'object', description: 'Standardized MCPContext envelope' } 
+      }, 
+      required: ['context'] 
+    },
   },
   {
     name: 'run_batch_missions',
@@ -233,16 +239,7 @@ function createMCPServer() {
         break;
 
       case 'run_factory_mission':
-        result = await runMission(args.project, args.objective, args.persona || 'captain_picard', (msg) => {
-          server.notification({
-            method: 'notifications/message',
-            params: {
-              level: 'info',
-              logger: 'SovereignFactory',
-              data: `[Mission] ${msg}`,
-            },
-          });
-        });
+        result = await runMission(args.context);
         break;
 
       case 'run_batch_missions':

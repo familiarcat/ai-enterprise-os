@@ -17,7 +17,7 @@
     "ddd:cleanup": "rm MissionDTO.js MissionRepository.js mission-events.test.js dishonorable-test.js apps/api/MissionSubscriber.js scripts/MissionService.js",
     "setup:python": "python3 -m venv .venv && . .venv/bin/activate && pip install --upgrade pip && PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 pip install crewai pydantic",
     "git_operation": "node -e \"const { gitOperation } = require('./core/orchestrator'); const [, action, message] = process.argv; gitOperation('sovereign', action, message).then(res => console.log(res)).catch(e => { console.error(e.message); process.exit(1); })\" --",
-    "run_mission": "node -e \"const { runMission } = require('./core/orchestrator'); const [, objective, persona] = process.argv; runMission('sovereign', objective, persona).then(res => console.log(JSON.stringify(res, null, 2))).catch(e => { console.error(e.message); process.exit(1); })\" --",
+    "run_mission": "node -e \"const { runMission } = require('./core/orchestrator'); const [, objective, persona] = process.argv; runMission({ sessionId: 'cli', persona: persona || 'captain_picard', objective }).then(res => console.log(JSON.stringify(res, null, 2))).catch(e => { console.error(e.message); process.exit(1); })\" --",
     "sensor_sweep": "node -e \"const { sensorSweep } = require('./core/orchestrator'); sensorSweep().then(res => console.log(JSON.stringify(res, null, 2))).catch(e => { console.error(e.message); process.exit(1); })\"",
     "health_check": "node -e \"const { verifyIntegrity } = require('./core/orchestrator'); verifyIntegrity().then(res => console.log(JSON.stringify(res, null, 2))).catch(e => { console.error(e.message); process.exit(1); })\""
   },

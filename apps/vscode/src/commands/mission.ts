@@ -41,12 +41,23 @@ export async function executeRunMission(context: vscode.ExtensionContext) {
         cancellable: false
     }, async () => {
         try {
-            const ws = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? 'sovereign';
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            const wsPath = workspaceFolder?.uri.fsPath ?? 'sovereign';
+            const wsName = workspaceFolder?.name ?? 'sovereign';
+            const activeFile = editor ? vscode.workspace.asRelativePath(editor.document.uri) : undefined;
+
             mcpClient.outputChannel.show();
-            const result = await mcpClient.runMission(ws, objective, selectedPersona.id);
-            
+            const result = await mcpClient.runMission(wsPath, objective, selectedPersona.id, wsName, activeFile);
             if (result && result.content) {
-                const text = result.content.map((c: any) => c.text).join('\n');
+                const rawText = result.content.map((c: any) => c.text).join('\n');
+                let text = rawText;
+                
+                // Attempt to parse the orchestrator's structured response for cleaner display
+                try {
+                    const parsed = JSON.parse(rawText);
+                    if (parsed.content && parsed.content[0]?.text) text = parsed.content[0].text;
+                } catch (e) { /* Fallback to raw text if not JSON */ }
+
                 mcpClient.outputChannel.appendLine(`[Result] ${text}`);
                 AgentViewportPanel.currentPanel?.updateLog(`Mission completed by ${selectedPersona.label}. Result: ${text}`);
                 vscode.window.showInformationMessage(`Mission completed by ${selectedPersona.label}.`);

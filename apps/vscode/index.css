@@ -77,6 +77,22 @@ header {
     color: var(--crew-green);
 }
 
+.export-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    transition: color 0.2s;
+}
+
+.export-btn:hover {
+    color: var(--crew-green);
+}
+
 .clear-btn {
     background: transparent;
     border: none;
@@ -101,7 +117,13 @@ header {
     font-size: 12px;
 }
 
-.log-entry { margin-bottom: 4px; line-height: 1.4; }
+.log-entry { 
+    margin-bottom: 4px; 
+    line-height: 1.4; 
+    white-space: pre-wrap; 
+    word-break: break-word;
+    padding-left: 4px;
+}
 .log-entry.progress { color: var(--crew-green); }
 .log-entry.error { color: #ff5555; }
 .timestamp { color: var(--text-muted); margin-right: 8px; }

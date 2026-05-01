@@ -316,6 +316,44 @@ function invokeCrewAgent(options) {
 }
 
 /**
+ * runMission: Core mission execution logic refactored for Composable Cognitive Infrastructure.
+ * Utilizes the MCPContext interface for all agentic reasoning.
+ * 
+ * @param {Object} context - Standardized MCPContext envelope.
+ * @returns {Promise<Object>} Mission results and generated plan.
+ */
+async function runMission(context) {
+  const { sessionId, persona, objective, historicalContext, modelTier } = context;
+  
+  console.log(`[Mission] ${persona} engaging objective: ${objective.substring(0, 50)}...`);
+
+  // Hydrate historical context if missing
+  const contextWindow = historicalContext || await recallMemory(objective);
+
+  try {
+    // Delegate to the CrewAI bridge via the Python runtime
+    const response = await invokeCrewAgent({
+      objective,
+      persona,
+      context: contextWindow,
+      model: modelTier || MODEL_CONFIG[persona]
+    });
+
+    // Persist mission outcome in vector memory
+    await storeMissionResult(response, { sessionId, persona, objective });
+
+    return {
+      status: 'SUCCESS',
+      content: [{ type: 'text', text: response }],
+      plan: objective
+    };
+  } catch (err) {
+    console.error(`[Orchestrator] Mission failure: ${err.message}`);
+    throw err;
+  }
+}
+
+/**
  * Executes Git operations to fulfill mission persistence.
  */
 async function gitOperation(project, action, message) {
@@ -499,8 +537,15 @@ async function integrateMcpTool(project, query, persona = 'captain_picard', depl
     Add a dashboard monitor component to display its status and capabilities: ${toolSpec.capabilities.join(', ')}. 
     Deploy context: ${deploymentConfig.subdomain}.pbradygeorgen.com
   `;
-  
-  const missionResult = await runMission(project, uiObjective, persona);
+
+  const missionResult = await runMission({
+    sessionId: `pinnacle-${Date.now()}`,
+    persona,
+    objective: uiObjective,
+    historicalContext: await recallMemory(uiObjective),
+    modelTier: MODEL_CONFIG[persona],
+    metadata: { project, ...deploymentConfig }
+  });
 
   return {
     status: 'INTEGRATED',
@@ -686,7 +731,7 @@ async function storeMissionResult(content, metadata = {}) {
 }
 
 module.exports = { 
-  invokeUnzipSearchTool, invokeCrewAgent, sensorSweep,
+  runMission, invokeUnzipSearchTool, invokeCrewAgent, sensorSweep,
   integrateMcpTool, worfSecurityAudit, gitOperation, 
   verifyIntegrity, listAvailableMCPs, syncMCPRegistry, worfSecurityScan, gitmcpSearch,
   recallMemory, storeMissionResult, generateEmbedding
