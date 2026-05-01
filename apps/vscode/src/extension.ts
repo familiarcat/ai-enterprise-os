@@ -55,10 +55,19 @@ class SovereignAgentViewProvider implements vscode.WebviewViewProvider {
                 case 'alert':
                     vscode.window.showErrorMessage(message.text);
                     return;
+                case 'notifyOffline':
+                    vscode.window.showWarningMessage(message.text);
+                    return;
+                case 'openSettings':
+                    vscode.commands.executeCommand('workbench.action.openSettings', 'sovereign');
+                    return;
+                case 'checkStatus':
+                    this._mcpClient.logStatus();
+                    return;
                 case 'mcpCall':
                     this._mcpClient.callTool(message.toolName, message.args)
-                        .then((result: any) => webviewView.webview.postMessage({ command: 'mcpResult', result }))
-                        .catch((error: any) => webviewView.webview.postMessage({ command: 'mcpError', error: error.message }));
+                        .then((result: any) => webviewView.webview.postMessage({ command: 'mcpResult', result, toolName: message.toolName, silent: message.silent }))
+                        .catch((error: any) => webviewView.webview.postMessage({ command: 'mcpError', error: error.message, toolName: message.toolName, silent: message.silent }));
                     return;
             }
         }, undefined, []);

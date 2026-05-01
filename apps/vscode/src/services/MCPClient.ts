@@ -64,6 +64,7 @@ export class MCPClient {
         this.outputChannel.appendLine(`\n[Status] --- Sovereign Bridge Diagnostics ---`);
         this.outputChannel.appendLine(`[Status] Target URL: ${this.bridgeUrl}`);
         this.outputChannel.appendLine(`[Status] Connection: ${this.sessionId ? 'CONNECTED' : 'DISCONNECTED'}`);
+        this.outputChannel.appendLine(`[Status] Protocol: SSE + JSON-RPC`);
         if (this.sessionId) {
             this.outputChannel.appendLine(`[Status] Active Session: ${this.sessionId}`);
         }
@@ -72,7 +73,7 @@ export class MCPClient {
 
     public async callTool(name: string, args: Record<string, any>): Promise<any> {
         const sessId = await this.ensureSession();
-        this.outputChannel.appendLine(`[MCP] Calling tool: ${name}`);
+        this.outputChannel.appendLine(`[MCP] Calling tool: ${name} with args: ${JSON.stringify(args)}`);
 
         const payload = {
             jsonrpc: '2.0',
@@ -98,6 +99,7 @@ export class MCPClient {
                 res.on('end', () => {
                     try {
                         const parsed = JSON.parse(data);
+                        this.outputChannel.appendLine(`[MCP] Received response for tool: ${name}`);
                         if (parsed.error) {
                             this.outputChannel.appendLine(`[MCP] Tool error: ${parsed.error.message}`);
                             reject(new Error(parsed.error.message));

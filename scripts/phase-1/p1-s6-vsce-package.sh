@@ -30,14 +30,21 @@ WEBVIEW_DIR="$EXT_DIR/webview"
 cd "$EXT_DIR"
 
 # ── 1. Install Extension Dependencies ─────────────────────────────────────────
-echo "  📦 Chief O'Brien: Re-aligning extension buffers (pnpm install)..."
-pnpm install --silent
+echo "  📦 Chief O'Brien: Re-aligning extension buffers..."
+pnpm install
+
+# ── 1b. Ensure Mandatory README exists (Required by vsce) ──────────────────────
+if [ ! -f "README.md" ]; then
+    echo "  📝 README.md missing. Generating minimal documentation pattern..."
+    echo "# Sovereign Factory" > README.md
+    echo "AI Enterprise OS extension." >> README.md
+fi
 
 # ── 2. Build Webview React Assets ─────────────────────────────────────────────
 if [ -d "$WEBVIEW_DIR" ]; then
     echo "  ⚛️  Building Agent Viewport (React Webview)..."
     cd "$WEBVIEW_DIR"
-    pnpm install --silent
+    pnpm install
     pnpm run build
     cd "$EXT_DIR"
     echo "  ✔ Webview assets generated in apps/vscode/media/"
@@ -56,8 +63,8 @@ VSIX_NAME="${EXT_NAME}-${EXT_VERSION}.vsix"
 
 echo "  📦 Packaging $VSIX_NAME..."
 
-# Use npx to ensure vsce is available without global installation
-if ! npx vsce package --no-dependencies -o "$VSIX_NAME" > /tmp/vsce-build.log 2>&1; then
+# Use non-interactive flags and show output to prevent hangs
+if ! pnpm exec vsce package --no-dependencies --allow-missing-repository -o "$VSIX_NAME"; then
     crew_fail \
         "$STEP" \
         "chief_obrien" \

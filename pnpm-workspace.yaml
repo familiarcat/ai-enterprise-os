@@ -1,5 +1,7 @@
 packages:
   - 'apps/*'
+  - 'apps/vscode/webview'
+  - 'packages/*' # Re-introducing this glob for shared workspace packages
   - 'domains/*'
   - 'core'
 

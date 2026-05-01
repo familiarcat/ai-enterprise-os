@@ -39,6 +39,44 @@ header {
     gap: 8px;
 }
 
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.settings-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    transition: color 0.2s;
+}
+
+.settings-btn:hover {
+    color: var(--crew-green);
+}
+
+.diag-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    transition: color 0.2s;
+}
+
+.diag-btn:hover {
+    color: var(--crew-green);
+}
+
 .clear-btn {
     background: transparent;
     border: none;
@@ -68,6 +106,29 @@ header {
 .log-entry.error { color: #ff5555; }
 .timestamp { color: var(--text-muted); margin-right: 8px; }
 
+.scroll-top-btn {
+    position: absolute;
+    bottom: 60px;
+    right: 20px;
+    background: var(--crew-green);
+    color: var(--space-dark);
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    transition: transform 0.2s, opacity 0.2s;
+}
+
+.scroll-top-btn:hover {
+    transform: scale(1.1);
+}
+
 footer {
     padding: 4px 12px;
     background: #090b16;
@@ -82,6 +143,27 @@ footer {
     gap: 4px;
     font-size: 10px;
     color: var(--text-muted);
+}
+
+.status-online { color: var(--crew-green); }
+.status-offline { color: #ff5555; }
+
+.reconnect-btn {
+    background: transparent;
+    border: 1px solid var(--border-dim);
+    border-radius: 2px;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1px 4px;
+    transition: all 0.2s;
+}
+
+.reconnect-btn:hover {
+    color: var(--crew-green);
+    border-color: var(--crew-green);
 }
 
 .icon-pulse {

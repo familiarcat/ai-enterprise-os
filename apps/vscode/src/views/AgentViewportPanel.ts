@@ -64,14 +64,23 @@ export class AgentViewportPanel {
                     case 'alert':
                         vscode.window.showErrorMessage(message.text);
                         return;
+                    case 'notifyOffline':
+                        vscode.window.showWarningMessage(message.text);
+                        return;
+                    case 'openSettings':
+                        vscode.commands.executeCommand('workbench.action.openSettings', 'sovereign');
+                        return;
+                    case 'checkStatus':
+                        this._mcpClient.logStatus();
+                        return;
                     case 'mcpCall':
                         // Example: webview requests an MCP call
                         this._mcpClient.callTool(message.toolName, message.args)
-                            .then(result => {
-                                this._panel.webview.postMessage({ command: 'mcpResult', result });
+                            .then((result: any) => {
+                                this._panel.webview.postMessage({ command: 'mcpResult', result, toolName: message.toolName, silent: message.silent });
                             })
-                            .catch(error => {
-                                this._panel.webview.postMessage({ command: 'mcpError', error: error.message });
+                            .catch((error: any) => {
+                                this._panel.webview.postMessage({ command: 'mcpError', error: error.message, toolName: message.toolName, silent: message.silent });
                             });
                         return;
                 }
