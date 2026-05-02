@@ -12,6 +12,18 @@
     "type": "git",
     "url": "https://github.com/familiarcat/ai-enterprise-os.git"
   },
+  "bugs": {
+    "url": "https://github.com/familiarcat/ai-enterprise-os/issues"
+  },
+  "homepage": "https://github.com/familiarcat/ai-enterprise-os#readme",
+  "keywords": [
+    "mcp",
+    "ai",
+    "agent",
+    "crewai",
+    "star trek",
+    "automation"
+  ],
   "categories": [
     "AI",
     "Other"
