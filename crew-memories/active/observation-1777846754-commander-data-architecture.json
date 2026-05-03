@@ -1,0 +1,35 @@
+{
+  "type": "observation",
+  "crew_member": "Commander Data",
+  "role": "DDD Architect",
+  "title": "Architecture Gap Analysis — MCP Layer + Orchestrator (2026-05-03)",
+  "summary": "Detailed analysis of structural divergence between stdio MCP server and HTTP bridge, orchestrator stub functions, and VSCode extension incomplete context layer. Phase 2 package extraction resolves all identified drift risks.",
+  "key_findings": [
+    "Tool surface divergence: mcp-server.js exposes 18 tools; mcp-http-bridge.mjs exposes 20 (adds gitmcp_search, integrate_mcp_tool, deploy_production)",
+    "Persona enrichment gap: HTTP bridge runs enrichAgentsWithPersonas() mapping persona→model before CrewAI invocation; stdio server does not — callers must inject model manually",
+    "Schema mismatch in run_factory_mission: stdio server takes flat args (project, objective, persona); HTTP bridge takes context object (sessionId, task, memory, constraints, metadata)",
+    "Three duplicate files create drift risk: scripts/mcp-server.js (8 tools, stale), core/mcp-http-bridge.mjs (character-for-character copy of apps/api/ version)",
+    "Worf reflection score parse fallback: if regex fails, score defaults to 10 — mission passes without actual quality audit (core/orchestrator.js line ~361)",
+    "VSCode stubs: context.ts (450 bytes), executor.ts (1001 bytes), registry.ts (627 bytes) — no actual context caching or execution plan persistence implemented",
+    "runMission v11 flow is correct: Execution → Reflection (Worf) → Self-Correction loop (max 3) → Supabase storage → SUCCESS envelope"
+  ],
+  "architecture_recommendations": [
+    "Canonicalize run_factory_mission schema on context object shape across both servers (Phase 2)",
+    "Extract @sovereign/mcp-bridge package with personas.mjs as single source of truth (Phase 2, Step 3)",
+    "Extract @sovereign/crew-personas package re-exporting from mcp-bridge with MODEL_TIERS (Phase 2, Step 4)",
+    "Delete scripts/mcp-server.js and core/mcp-http-bridge.mjs after Phase 2 extraction",
+    "Implement VSCode context.ts: cache DDD context per session, invalidate on domain scaffold events",
+    "Fix Worf reflection parse: throw error on regex failure instead of defaulting to score 10"
+  ],
+  "ddd_layer_status": {
+    "domain": "5 domains scaffolded (ads, fund, outbound, revenue, seo)",
+    "application": "orchestrator.js is the application layer — production-ready",
+    "infrastructure": "Redis + Supabase wired; Python subprocess bridge operational",
+    "ui": "apps/dashboard (Next.js) + apps/vscode (VSCode ext) — dashboard complete, VSCode 70%",
+    "tests": "No formal test suite — vitest config exists but coverage is minimal"
+  },
+  "tags": ["architecture", "mcp", "ddd", "drift-risk", "data", "phase-2"],
+  "category": "architecture",
+  "timestamp": "2026-05-03T22:20:00.000Z",
+  "source": "explore-sweep + mcp-architecture-analysis"
+}

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "sovereign-factory": {
+      "command": "node",
+      "args": ["apps/api/mcp-server.js"],
+      "cwd": "/Users/bradygeorgen/Dev/ai-enterprise-os"
+    }
+  }
+}

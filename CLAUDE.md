@@ -490,5 +490,7 @@ node scripts/test-memory-retrieval.js
 
 ---
 
+"Be extremely concise; omit preambles, "thinking" phrases, and concluding summaries. Only output technical actions."
+
 *Last updated: 2026-04-15 — ai-enterprise-os session*
 *4 bugs fixed: MODEL_CONFIG, gitOperation shell injection, run-pipeline step registry, MCP bridge API key guard*

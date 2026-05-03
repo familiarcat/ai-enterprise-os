@@ -36,7 +36,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 // ── CJS interop ──────────────────────────────────────────────────────────────
 const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
-require('dotenv').config({ path: resolve(__dirname, '../../.env') });
+require('dotenv').config({ path: resolve(__dirname, '../../.env'), override: true });
 
 const {
   invokeUnzipSearchTool,

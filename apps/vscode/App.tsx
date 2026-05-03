@@ -228,6 +228,17 @@ const App: React.FC = () => {
                     color: var(--vscode-editor-foreground, #cccccc);
                 }
                 .output-text { white-space: pre-wrap; }
+                .error-boundary-fallback {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 8px;
+                    border: 1px dashed var(--vscode-charts-red, #f14c4c);
+                    color: var(--vscode-errorForeground, #f14c4c);
+                    font-size: 10px;
+                    text-transform: uppercase;
+                    background: rgba(241, 76, 76, 0.02);
+                }
             `}</style>
             <header>
                 <div className="header-left">

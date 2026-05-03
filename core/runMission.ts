@@ -1,11 +1,11 @@
 import * as v from 'vscode';
-import { getMCPClient as getCl } from '../apps/vscode/src/services/MCPClient';
+import { MCPClient } from '../apps/vscode/src/services/MCPClient'; // Import the class directly
 import { AgentViewportPanel as Avp } from '../apps/vscode/src/views/AgentViewportPanel';
 import { executeAgentTask } from '../apps/vscode/src/views/executor';
 
-export async function executeRunMission(ctx: v.ExtensionContext) {
-  const c = getCl();
-  if (!c || !c.isConnected) {
+export async function executeRunMission(ctx: v.ExtensionContext, mcpClient: MCPClient) { // Accept MCPClient instance
+  const c = mcpClient; // Use the passed instance
+  if (!c.isConnected) { // No need to check for !c as it's guaranteed to be an instance
     return v.window.showErrorMessage('Sovereign Factory: MCP Bridge is offline. Please start the bridge to run missions.');
   }
 

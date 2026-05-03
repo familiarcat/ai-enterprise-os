@@ -1,0 +1,59 @@
+{
+  "type": "observation",
+  "crew_member": "Lt. Worf",
+  "role": "Senior QA Auditor / Chief of Security",
+  "title": "Security Audit — v11 Architecture Sweep (2026-05-03)",
+  "summary": "Security audit of full v11 architecture reveals three critical gaps requiring remediation before Phase 4 production deployment. Pre-commit credential scan patterns are solid. SSE endpoint lacks authentication by default. deploy_production is a silent no-op.",
+  "security_findings": [
+    {
+      "severity": "HIGH",
+      "finding": "No SSE endpoint authentication by default",
+      "detail": "MCP HTTP bridge accepts any SSE connection unless MCP_BRIDGE_API_KEY env var is set. On a local machine this is acceptable; any networked or production deployment exposes all 20 MCP tools to any client on the subnet.",
+      "remediation": "Set MCP_BRIDGE_API_KEY before Phase 4. Add auth middleware to GET /sse handler in apps/api/mcp-http-bridge.mjs."
+    },
+    {
+      "severity": "HIGH",
+      "finding": "deploy_production is a silent stub",
+      "detail": "The deploy_production tool calls gitOperation('merge-to-main') and fires an SSE notification but does NOT trigger a CI/CD pipeline. Any call returns success without actually deploying. Risk: operators believe deployment occurred when it has not.",
+      "remediation": "Wire to GitHub Actions workflow_dispatch API or webhook before Phase 4. Add explicit 'STUB: not deployed' error until wired."
+    },
+    {
+      "severity": "MEDIUM",
+      "finding": "Worf reflection quality score defaults to 10 on parse failure",
+      "detail": "In core/orchestrator.js ~line 361, if the regex extraction of the quality score from Worf's reflection output fails, the score defaults to 10 (maximum) and the mission passes the quality gate without actual audit.",
+      "remediation": "Change default to score 0 on parse failure, or throw a structured error that triggers re-reflection."
+    },
+    {
+      "severity": "LOW",
+      "finding": "SSE session resolver map may leak on connection drop",
+      "detail": "In apps/vscode/src/services/MCPClient.ts, concurrent callTool() calls share one SSE session with response resolvers in a Map. If the SSE connection drops mid-mission, resolvers hang until the 2-minute timeout fires.",
+      "remediation": "Add connection drop listener that rejects all pending resolvers immediately with a reconnect error."
+    }
+  ],
+  "pre_commit_gate_status": "OPERATIONAL",
+  "credential_patterns_monitored": [
+    "sk-or-v1-* (OpenRouter)",
+    "sk-ant-api03-* (Anthropic)",
+    "AIza* (Google)",
+    "eyJ* (Supabase JWT)",
+    "AKIA* (AWS Access Key)",
+    "AWS_SECRET_* (AWS Secret)",
+    "postgresql://* (DB connection strings)",
+    "-----BEGIN * PRIVATE KEY----- (Private keys)",
+    "[A-Za-z0-9]{32,} heuristic (Generic long secrets)"
+  ],
+  "registry_audit_status": "8 external MCPs — all VERIFIED/SECURE by Worf audit",
+  "worf_security_audit_rules": [
+    "Source URL must begin with https:// — http:// sources rejected as DISHONOURABLE",
+    "Capabilities must not match: /eval\\(|exec\\(|curl|child_process|fs\\.rm/"
+  ],
+  "conclusions": [
+    "System is secure for local development operations",
+    "Phase 4 deployment BLOCKED until SSE auth and deploy_production stub are resolved",
+    "Reflection quality gate has a silent bypass — must be hardened before autonomous operation"
+  ],
+  "tags": ["security", "worf", "pre-push", "phase-4-blocker", "auth", "quality-gate"],
+  "category": "security",
+  "timestamp": "2026-05-03T22:20:00.000Z",
+  "source": "explore-sweep + mcp-architecture-analysis"
+}

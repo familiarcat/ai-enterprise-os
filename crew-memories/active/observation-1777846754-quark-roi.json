@@ -1,0 +1,34 @@
+{
+  "type": "observation",
+  "crew_member": "Quark",
+  "role": "Cost Optimization Specialist / Business Analyst",
+  "title": "Cost & ROI Analysis — Model Routing and Economic Gaps (2026-05-03)",
+  "summary": "Model tier routing is architecturally correct with cost-optimized per-persona assignment. Batch mission parallelism (the highest cost-saving mechanism) is stubbed. Supabase billing table is unreachable, blocking ROI report generation. Estimated cost per canonical 8-step mission: $0.08–$0.42 depending on task complexity.",
+  "model_cost_table": [
+    { "tier": "HAIKU", "model": "anthropic/claude-3-haiku", "cost_per_million": "$0.25", "personas": ["counselor_troi", "geordi_la_forge"] },
+    { "tier": "SONNET", "model": "anthropic/claude-3-5-sonnet", "cost_per_million": "$3.00", "personas": ["commander_riker", "commander_data", "dr_crusher"] },
+    { "tier": "OPUS", "model": "anthropic/claude-3-opus", "cost_per_million": "$15.00", "personas": ["captain_picard"] },
+    { "tier": "GPT_4O_MINI", "model": "openai/gpt-4o-mini", "cost_per_million": "$0.15", "personas": ["lt_worf", "chief_obrien", "quark"] },
+    { "tier": "GEMINI_FLASH", "model": "google/gemini-flash-1.5", "cost_per_million": "$0.075", "personas": ["lt_uhura"] }
+  ],
+  "key_findings": [
+    "selectTierByComplexity() in crew-manifest.ts correctly routes: score < 0.3 → HAIKU, < 0.7 → SONNET, >= 0.7 → OPUS",
+    "enrichAgentsWithPersonas() in HTTP bridge enforces cost routing before Python CrewAI invocation — no LLM calls use wrong tier",
+    "runMissions batch concurrency is a stub — sequential fallback only, parallelism cost savings are not realized",
+    "generate_roi_report tool exists but Supabase billing table unreachable — ROI data unavailable",
+    "v11 reflection loop adds up to 3x execution cost per mission if quality gate fails — budget headroom must account for worst case",
+    "Counselor Troi's explicit role is cost-optimization validation (Step 2 of canonical flow) — she gates budget before expensive SONNET/OPUS steps run",
+    "BarItalia STL target: under $1.50 per full 8-step mission — achievable with current tier routing if Picard (OPUS) is constrained to planning only"
+  ],
+  "cost_optimization_recommendations": [
+    "Implement runMissions with concurrency limit of 3-5 to enable parallel persona execution (reduces wall-clock time without increasing cost)",
+    "Add Counselor Troi budget gate as a hard check — abort mission if projected cost exceeds budget constraint",
+    "Restore Supabase connection to enable billing table writes and ROI report generation",
+    "Consider downgrading captain_picard from OPUS to SONNET for non-strategic missions — saves $14.75/M tokens",
+    "Enable MODEL_CREW_MANAGER env override in .env to allow operators to dial Picard's model without code changes"
+  ],
+  "tags": ["cost", "roi", "quark", "model-routing", "batch-missions", "budget"],
+  "category": "financial",
+  "timestamp": "2026-05-03T22:20:00.000Z",
+  "source": "explore-sweep + crew-manifest-analysis"
+}

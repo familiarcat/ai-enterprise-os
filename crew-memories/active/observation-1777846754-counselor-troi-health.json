@@ -1,0 +1,40 @@
+{
+  "type": "observation",
+  "crew_member": "Counselor Troi",
+  "role": "Expert System Analyst / Cost Optimization",
+  "title": "System Health & Environment Diagnostics (2026-05-03)",
+  "summary": "Core infrastructure is healthy. Python environment resolved with venv313 (Python 3.13). Supabase vector memory is unreachable — the primary symptom blocking semantic recall and mission persistence. MCP server process requires full Claude Code restart to load updated PYTHON_BIN.",
+  "system_status": {
+    "redis": { "status": "HEALTHY", "detail": "redis://127.0.0.1:6379 responding to PING" },
+    "openrouter": { "status": "HEALTHY", "detail": "API key valid, embedding API responding" },
+    "python_venv": { "status": "HEALTHY", "detail": ".venv313 (Python 3.13) — crewai + pydantic importable" },
+    "env_vars": { "status": "HEALTHY", "detail": "All required vars set: REDIS_URL, SUPABASE_URL, SUPABASE_KEY, OPENROUTER_API_KEY, PYTHON_BIN" },
+    "supabase": { "status": "DEGRADED", "detail": "TypeError: fetch failed — vector memory, mission persistence, and billing unavailable" },
+    "mcp_server_python": { "status": "DEGRADED", "detail": "mcp-server.js process loaded before PYTHON_BIN added to .env; requires full Claude Code restart (not /reload-plugins)" },
+    "mcp_http_bridge": { "status": "HEALTHY", "detail": "Running on :3002 with PYTHON_BIN=/.../.venv313/bin/python3.13, PID 98156" }
+  },
+  "supabase_diagnosis": {
+    "error": "TypeError: fetch failed",
+    "likely_causes": [
+      "Supabase project may be paused (free tier pauses after 1 week of inactivity)",
+      "Network/DNS resolution failure for rpkkkbufdwxmjaerbhbn.supabase.co",
+      "SUPABASE_KEY may have expired or been rotated"
+    ],
+    "remediation_steps": [
+      "1. Visit https://supabase.com/dashboard and verify project is active (not paused)",
+      "2. Run: curl -s https://rpkkkbufdwxmjaerbhbn.supabase.co/rest/v1/ -H 'apikey: <SUPABASE_KEY>' to test directly",
+      "3. If paused, click 'Resume project' in Supabase dashboard",
+      "4. Re-run health_check after resuming"
+    ]
+  },
+  "python_resolution_path": {
+    "issue": "Python 3.14 in .venv has pyexpat/libexpat symbol conflict (Darwin 25.1.0)",
+    "resolution": "Created .venv313 with Python 3.13 from /opt/homebrew/bin/python3.13",
+    "permanent_fix": "Added PYTHON_BIN to .env; requires full Claude Code session restart to take effect in mcp-server.js",
+    "workaround_active": "mcp-http-bridge.mjs restarted with PYTHON_BIN env var — HTTP bridge path is operational"
+  },
+  "tags": ["health", "diagnostics", "troi", "supabase", "python", "environment"],
+  "category": "system-health",
+  "timestamp": "2026-05-03T22:20:00.000Z",
+  "source": "health-check-results + explore-sweep"
+}

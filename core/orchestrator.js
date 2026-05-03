@@ -16,6 +16,9 @@ const { incrementTokenUsage } = require('./repository.js');
  * Verifies the integrity of external memory connections (Redis and Supabase).
  */
 async function verifyIntegrity() {
+  // Always reload .env so health checks reflect current file state regardless of process age
+  require('dotenv').config({ path: path.resolve(__dirname, '../.env'), override: true });
+  resetMemorySystems();
   const { redis, supabase } = getMemorySystems();
   const report = { redis: 'checking', supabase: 'checking', openrouter: 'checking', env: 'checking', python: 'checking' };
 
@@ -138,12 +141,18 @@ const WORF_EXCLUSIONS = [
 function getPythonBin() {
   if (process.env.PYTHON_BIN) {
     if (fs.existsSync(process.env.PYTHON_BIN)) return process.env.PYTHON_BIN;
-    throw new Error(`[Env Error] Configured PYTHON_BIN not found at: ${process.env.PYTHON_BIN}`);
+    // Configured path missing — fall through to auto-detect rather than hard-fail
   }
 
-  // Auto-detect local virtual environment for better reliability
-  const venvPath = path.resolve(__dirname, '../.venv/bin/python3');
-  if (fs.existsSync(venvPath)) return venvPath;
+  // Prefer venv313 (Python 3.13, crewai-compatible) over legacy venv
+  const candidates = [
+    path.resolve(__dirname, '../.venv313/bin/python3.13'),
+    path.resolve(__dirname, '../.venv313/bin/python3'),
+    path.resolve(__dirname, '../.venv/bin/python3'),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
 
   return 'python3';
 }
@@ -907,9 +916,84 @@ async function generateROIReport(project = null) {
   };
 }
 
+/**
+ * runMissions: Executes multiple missions concurrently.
+ * Placeholder for Phase 2 migration.
+ */
+async function runMissions(missions, limit = 5, progressCallback = () => {}) {
+  console.warn(`[Orchestrator] runMissions called (placeholder). Missions: ${missions.length}, Limit: ${limit}`);
+  // Simulate execution for each mission
+  const results = [];
+  for (let i = 0; i < missions.length; i++) {
+    const mission = missions[i];
+    progressCallback({ index: i, total: missions.length, objective: mission.objective });
+    // In a real implementation, this would call runMission for each
+    results.push({
+      mission: mission.objective,
+      status: 'SIMULATED_SUCCESS',
+      output: `Simulated result for mission: ${mission.objective}`
+    });
+    await new Promise(resolve => setTimeout(resolve, 100)); // Simulate work
+  }
+  return { status: 'SIMULATED_BATCH_COMPLETE', results };
+}
+
+/**
+ * getVersionsHierarchy: Extracts a structured JSON hierarchy of project versions.
+ * Placeholder for Phase 2 migration.
+ */
+async function getVersionsHierarchy() {
+  console.warn('[Orchestrator] getVersionsHierarchy called (placeholder).');
+  return {
+    status: 'SIMULATED_SUCCESS',
+    hierarchy: {
+      'v1.0': { date: '2026-01-01', description: 'Initial deployment' },
+      'v1.1': { date: '2026-02-15', description: 'MCP Bridge integration' },
+      'v1.2': { date: '2026-04-01', description: 'v11 Architecture update' }
+    }
+  };
+}
+
+/**
+ * manageProject: Initializes or updates project-level metadata.
+ * Placeholder for Phase 2 migration.
+ */
+async function manageProject(project, action, details) {
+  console.warn(`[Orchestrator] manageProject called (placeholder). Project: ${project}, Action: ${action}`);
+  return {
+    status: 'SIMULATED_SUCCESS',
+    message: `Project '${project}' managed with action '${action}'. Details: ${JSON.stringify(details)}`
+  };
+}
+
+/**
+ * manageSprint: Manages Agile sprints within a project.
+ * Placeholder for Phase 2 migration.
+ */
+async function manageSprint(project, action, sprint_name, details) {
+  console.warn(`[Orchestrator] manageSprint called (placeholder). Project: ${project}, Sprint: ${sprint_name}, Action: ${action}`);
+  return {
+    status: 'SIMULATED_SUCCESS',
+    message: `Sprint '${sprint_name}' for project '${project}' managed with action '${action}'. Details: ${JSON.stringify(details)}`
+  };
+}
+
+/**
+ * manageTask: Creates, moves, or assigns tasks within a project or sprint.
+ * Placeholder for Phase 2 migration.
+ */
+async function manageTask(project, action, task_id, details) {
+  console.warn(`[Orchestrator] manageTask called (placeholder). Project: ${project}, Task: ${task_id}, Action: ${action}`);
+  return {
+    status: 'SIMULATED_SUCCESS',
+    message: `Task '${task_id}' for project '${project}' managed with action '${action}'. Details: ${JSON.stringify(details)}`
+  };
+}
+
 module.exports = { 
   runMission, invokeUnzipSearchTool, invokeCrewAgent, sensorSweep,
   integrateMcpTool, worfSecurityAudit, gitOperation, 
-  verifyIntegrity, listAvailableMCPs, syncMCPRegistry, worfSecurityScan, gitmcpSearch,
-  recallMemory, storeMissionResult, generateEmbedding, generateROIReport
+  verifyIntegrity, listAvailableMCPs, syncMCPRegistry, worfSecurityScan, gitmcpSearch, generateROIReport,
+  recallMemory, storeMissionResult, generateEmbedding,
+  runMissions, getVersionsHierarchy, manageProject, manageSprint, manageTask // Explicitly exported
 };

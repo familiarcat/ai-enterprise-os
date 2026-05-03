@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s http://localhost:3002/health)",
+      "Bash(node apps/api/mcp-http-bridge.mjs)",
+      "Bash(echo \"PID=$!\")",
+      "mcp__sovereign-factory__health_check",
+      "Bash(curl *)",
+      "mcp__sovereign-factory__run_crew_agent",
+      "Bash(.venv/bin/pip install *)",
+      "Read(//opt/homebrew/bin/**)",
+      "Read(//usr/local/bin/**)",
+      "Bash(pyenv versions *)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "sovereign-factory"
+  ]
+}

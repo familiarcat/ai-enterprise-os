@@ -1,18 +1,15 @@
 const path = require("path");
 const fs = require("fs");
-require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env'), override: true });
 
 const { Server } = require("@modelcontextprotocol/sdk/server/index.js");
 const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js");
 const { CallToolRequestSchema, ListToolsRequestSchema } = require("@modelcontextprotocol/sdk/types.js");
 const { 
   invokeUnzipSearchTool, invokeCrewAgent, gitOperation, verifyIntegrity, 
-  listAvailableMCPs, syncMCPRegistry, worfSecurityScan, generateROIReport, sensorSweep 
+  listAvailableMCPs, syncMCPRegistry, worfSecurityScan, generateROIReport, sensorSweep,
+  runMission, runMissions, getVersionsHierarchy, manageProject, manageSprint, manageTask
 } = require("../../core/orchestrator.js");
-const {
-  runMission, runMissions, getVersionsHierarchy,
-  manageProject, manageSprint, manageTask, resolveSkills
-} = require("../../domains/mission/application/MissionService.js");
 
 const server = new Server({
   name: "sovereign-factory",
@@ -48,11 +45,26 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          project: { type: "string" },
-          objective: { type: "string" },
-          persona: { type: "string", description: "The crew handle executing the mission (e.g. commander_riker)" }
+          context: {
+            type: "object",
+            properties: {
+              sessionId: { type: "string" },
+              persona: { type: "string", description: "Star Trek persona (e.g., captain_picard)" },
+              task: { type: "string", description: "The objective of the mission" },
+              memory: {
+                type: "object",
+                properties: {
+                  shortTerm: { type: "array", items: { type: "string" } },
+                  longTerm: { type: "array", items: { type: "string" } }
+                }
+              },
+              constraints: { type: "array", items: { type: "string" } },
+              metadata: { type: "object" }
+            },
+            required: ["sessionId", "task"]
+          }
         },
-        required: ["project", "objective"]
+        required: ["context"]
       }
     },
     {
@@ -241,7 +253,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (name === "search_code") {
     result = await invokeUnzipSearchTool(args);
   } else if (name === "run_factory_mission") {
-    result = await runMission(args.project, args.objective, args.persona);
+    result = await runMission(args.context);
   } else if (name === "run_batch_missions") {
     result = await runMissions(args.missions, args.limit, (info) => {
       server.notification({

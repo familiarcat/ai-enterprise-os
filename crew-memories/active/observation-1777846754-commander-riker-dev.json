@@ -1,0 +1,41 @@
+{
+  "type": "observation",
+  "crew_member": "Commander Riker",
+  "role": "Senior Full-Stack Developer",
+  "title": "Development Status — VSCode Extension + Orchestrator Stubs (2026-05-03)",
+  "summary": "VSCode extension is ~70% complete. Core SSE client, webview lifecycle, and v11 reflection rendering are production-ready. Three stub files and missing formal error boundary are the remaining gaps. Five orchestrator placeholder functions must be replaced before Phase 2 batch missions can operate.",
+  "vscode_extension_status": {
+    "completed": [
+      "MCPClient.ts — SSE connection, session isolation, JSON-RPC dispatch, 2min timeout, progress streaming",
+      "App.tsx — v11 reflection rendering, log export, bridge status polling, auto-scroll, settings integration",
+      "extension.ts — SovereignAgentViewProvider, 4 command registrations (runMission, sensorSweep, healthCheck, checkBridgeStatus)",
+      "AgentViewportPanel.ts — webview lifecycle + message routing",
+      "commands/ — mission.ts, healthCheck.ts, sensorSweep.ts"
+    ],
+    "incomplete": [
+      "context.ts (450 bytes) — DDD context caching not implemented",
+      "executor.ts (1001 bytes) — execution plan persistence not implemented",
+      "registry.ts (627 bytes) — tool registry caching not implemented",
+      "No formal React.ErrorBoundary wrapping App.tsx",
+      "SSE reconnect: onDisconnect event emitted but reconnect is manual (UI must re-initiate)"
+    ]
+  },
+  "orchestrator_stub_status": [
+    { "function": "runMissions", "line": 915, "status": "STUB", "priority": "HIGH", "effort": "2h", "impact": "Batch concurrency, parallel persona execution" },
+    { "function": "getVersionsHierarchy", "line": 937, "status": "STUB", "priority": "MEDIUM", "effort": "2h", "impact": "Version tree visualization in CodeExecutionPanel" },
+    { "function": "manageProject", "line": 953, "status": "STUB", "priority": "MEDIUM", "effort": "8h total", "impact": "Agile workflow automation" },
+    { "function": "manageSprint", "line": 965, "status": "STUB", "priority": "MEDIUM", "effort": "included above", "impact": "Sprint lifecycle management" },
+    { "function": "manageTask", "line": 977, "status": "STUB", "priority": "MEDIUM", "effort": "included above", "impact": "Task CRUD and assignment" }
+  ],
+  "next_sprint_recommendations": [
+    "Implement runMissions with Promise.allSettled + concurrency limiter (p-limit or manual semaphore)",
+    "Add React.ErrorBoundary in App.tsx around main render tree",
+    "Implement context.ts: store DDD context per sessionId in VSCode ExtensionContext.workspaceState",
+    "Add SSE auto-reconnect with exponential backoff in MCPClient.ts",
+    "Wire getVersionsHierarchy to scan /versions folder (or git tags) for actual version data"
+  ],
+  "tags": ["development", "riker", "vscode", "orchestrator", "stubs", "phase-1"],
+  "category": "development",
+  "timestamp": "2026-05-03T22:20:00.000Z",
+  "source": "explore-sweep"
+}

@@ -17,23 +17,49 @@ step_header "PHASE 0 — CONVERGENCE" "Step 0: Sync Local Credentials → GitHub
 ENV_FILE="$ROOT/.env"
 ZSHRC="$HOME/.zshrc"
 
-# Keys to sync
+# ── Step 0a: Unify .zshrc → .env before syncing to GitHub ────────────────────
+echo "  Running env-sync to pull .zshrc credentials into .env..."
+node "$ROOT/scripts/lib/env-sync.js" || echo "  ⚠ env-sync.js failed — continuing with existing .env"
+
+# Keys to sync to GitHub Actions secrets
 SYNC_KEYS=(
   "OPENROUTER_API_KEY"
   "SUPABASE_URL"
   "SUPABASE_KEY"
+  "SUPABASE_SERVICE_ROLE_KEY"
+  "SUPABASE_PUBLIC_KEY"
   "REDIS_URL"
   "N8N_URL"
+  "N8N_BASE_URL"
+  "N8N_PROD_API_KEY"
   "N8N_WEBHOOK_SECRET"
+  "N8N_OBSERVATION_LOUNGE_WEBHOOK"
+  "N8N_FEDERATION_MISSION_WEBHOOK"
+  "N8N_CREW_CAPTAIN_PICARD_WEBHOOK"
+  "N8N_CREW_COMMANDER_RIKER_WEBHOOK"
+  "N8N_CREW_COMMANDER_DATA_WEBHOOK"
+  "N8N_CREW_GEORDI_LA_FORGE_WEBHOOK"
+  "N8N_CREW_WORF_WEBHOOK"
+  "N8N_CREW_DR_CRUSHER_WEBHOOK"
+  "N8N_CREW_COUNSELOR_TROI_WEBHOOK"
+  "N8N_CREW_QUARK_WEBHOOK"
+  "N8N_CREW_CHIEF_OBRIEN_WEBHOOK"
+  "N8N_CREW_UHURA_WEBHOOK"
+  "LANGCHAIN_OPENAI_API_KEY"
   "VERCEL_TOKEN"
   "VERCEL_ORG_ID"
   "VERCEL_PROJECT_ID"
   "VERCEL_ORG_ID_CIVIC"
   "VERCEL_PROJECT_ID_CIVIC"
+  "AWS_REGION"
+  "AWS_PROFILE"
   "EC2_HOST"
   "EC2_USER"
   "EC2_SSH_KEY"
   "CREW_OBS_KEY"
+  "DAILY_BUDGET_USD"
+  "MONTHLY_BUDGET_USD"
+  "AUTHORIZED_USERS"
 )
 
 # Optional model-tier overrides
@@ -46,6 +72,7 @@ OPTIONAL_KEYS=(
   "MODEL_ANALYST"
   "MODEL_COST_OPT"
   "NEXT_PUBLIC_MCP_URL_PROD"
+  "GEMINI_MODEL"
 )
 
 # ── 1. Validate .env exists ───────────────────────────────────────────────────
