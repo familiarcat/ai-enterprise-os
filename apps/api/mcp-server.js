@@ -4,7 +4,10 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const { Server } = require("@modelcontextprotocol/sdk/server/index.js");
 const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js");
 const { CallToolRequestSchema, ListToolsRequestSchema } = require("@modelcontextprotocol/sdk/types.js");
-const { invokeUnzipSearchTool, invokeCrewAgent, gitOperation, verifyIntegrity, listAvailableMCPs, syncMCPRegistry, worfSecurityScan } = require("../../core/orchestrator.js");
+const { 
+  invokeUnzipSearchTool, invokeCrewAgent, gitOperation, verifyIntegrity, 
+  listAvailableMCPs, syncMCPRegistry, worfSecurityScan, generateROIReport 
+} = require("../../core/orchestrator.js");
 const {
   runMission, runMissions, getVersionsHierarchy,
   manageProject, manageSprint, manageTask, resolveSkills
@@ -206,6 +209,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: { name: { type: "string" } },
         required: ["name"]
       }
+    },
+    {
+      name: "generate_roi_report",
+      description: "Quark's ROI Analysis: Aggregates mission costs and token usage metadata from Supabase.",
+      inputSchema: {
+        type: "object",
+        properties: { project: { type: "string", description: "Optional project ID to filter results" } }
+      }
     }
   ]
 }));
@@ -248,6 +259,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     result = await invokeCrewAgent(args);
   } else if (name === "git_operation") {
     result = await gitOperation(args.project, args.action, args.message);
+  } else if (name === "generate_roi_report") {
+    result = await generateROIReport(args.project);
   } else if (name === "list_available_mcps") {
     result = await listAvailableMCPs(args.sync);
   } else if (name === "sync_mcp_registry") {

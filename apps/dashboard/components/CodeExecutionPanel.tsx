@@ -12,6 +12,7 @@
 import React, { useState } from 'react';
 import { type AgentExecution } from './ObservationLounge';
 import { CREW } from '@/lib/crew-manifest';
+import ROIBreakdown, { type ROIReport } from './ROIBreakdown';
 
 interface CodeExecutionPanelProps {
   executions:  AgentExecution[];
@@ -24,6 +25,34 @@ export default function CodeExecutionPanel({
   executions, task, project, onNewTask
 }: CodeExecutionPanelProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [showROI, setShowROI] = useState(false);
+  const [roiReport, setRoiReport] = useState<ROIReport | null>(null);
+  const [loadingROI, setLoadingROI] = useState(false);
+
+  const fetchROIReport = async () => {
+    if (roiReport) {
+      setShowROI(!showROI);
+      return;
+    }
+
+    setLoadingROI(true);
+    try {
+      const res = await fetch('/api/mcp/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tool: 'generate_roi_report', args: { project } })
+      });
+      const data = await res.json();
+      if (data.status === 'SUCCESS') {
+        setRoiReport(data.result.report);
+        setShowROI(true);
+      }
+    } catch (e) {
+      console.error('Failed to fetch ROI report:', e);
+    } finally {
+      setLoadingROI(false);
+    }
+  };
 
   const completed = executions.filter(e => e.status === 'SUCCESS');
   const failed    = executions.filter(e => e.status === 'ERROR');
@@ -139,6 +168,13 @@ export default function CodeExecutionPanel({
         })}
       </div>
 
+      {/* ROI Breakdown Integration */}
+      {showROI && roiReport && (
+        <div className="p-8 bg-[#0d1022] border-b-2 border-black">
+          <ROIBreakdown report={roiReport} />
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex divide-x-2 divide-black bg-black">
         <button
@@ -146,6 +182,13 @@ export default function CodeExecutionPanel({
           className="flex-1 py-8 font-black uppercase tracking-[0.2em] text-sm text-white hover:bg-white hover:text-black transition-all"
         >
           01 / New Mission
+        </button>
+        <button
+          onClick={fetchROIReport}
+          disabled={loadingROI}
+          className="flex-1 py-8 font-black uppercase tracking-[0.2em] text-sm text-white hover:bg-[#00ffaa] hover:text-black transition-all"
+        >
+          {loadingROI ? 'Calculating...' : showROI ? '03 / Hide ROI' : '03 / View ROI Analysis'}
         </button>
         <button
           onClick={() => {

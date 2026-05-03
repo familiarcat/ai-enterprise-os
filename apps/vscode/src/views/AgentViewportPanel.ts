@@ -1,5 +1,16 @@
 import * as vscode from 'vscode';
 import { MCPClient } from '../services/MCPClient';
+import { executeAgentTask } from './executor';
+
+interface WebviewMessage {
+    command: string;
+    text?: string;
+    toolName?: string;
+    args?: any;
+    silent?: boolean;
+    content?: string;
+    defaultFilename?: string;
+}
 
 /**
  * Manages the Sovereign Agent Viewport webview panel.
@@ -55,35 +66,38 @@ export class AgentViewportPanel {
 
         // Listen for when the panel is disposed
         // This happens when the user closes the panel or when the panel is closed programmatically
-        this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
+        this._panel.onDidDispose(() => this.dispose(), undefined, this._disposables);
 
         // Handle messages from the webview
         this._panel.webview.onDidReceiveMessage(
-            message => {
-                switch (message.command) {
+            (message: any) => {
+                if (!message || typeof message.command !== 'string') return;
+                const msg = message as WebviewMessage;
+
+                switch (msg.command) {
                     case 'alert':
-                        vscode.window.showErrorMessage(message.text);
+                        if (typeof msg.text === 'string') vscode.window.showErrorMessage(msg.text);
                         return;
                     case 'notifyOffline':
-                        vscode.window.showWarningMessage(message.text);
+                        if (typeof msg.text === 'string') vscode.window.showWarningMessage(msg.text);
                         return;
                     case 'openSettings':
                         vscode.commands.executeCommand('workbench.action.openSettings', 'sovereign');
                         return;
                     case 'exportLogs':
                         vscode.window.showSaveDialog({
-                            defaultUri: vscode.Uri.file(message.defaultFilename),
+                            defaultUri: typeof msg.defaultFilename === 'string' ? vscode.Uri.file(msg.defaultFilename) : undefined,
                             filters: {
                                 'Markdown': ['md']
                             }
                         }).then(fileUri => {
-                            if (fileUri) {
-                                vscode.workspace.fs.writeFile(fileUri, Buffer.from(message.content, 'utf8'))
+                            if (fileUri && msg.content) {
+                                Promise.resolve(vscode.workspace.fs.writeFile(fileUri, new TextEncoder().encode(msg.content)))
                                     .then(() => {
                                         vscode.window.showInformationMessage(`Logs exported to ${fileUri.fsPath}`);
                                     })
-                                    .catch(err => {
-                                        vscode.window.showErrorMessage(`Failed to export logs: ${err.message}`);
+                                    .catch((err: any) => {
+                                        vscode.window.showErrorMessage(`Failed to export logs: ${err?.message || String(err)}`);
                                     });
                             }
                         });
@@ -91,31 +105,53 @@ export class AgentViewportPanel {
                     case 'checkStatus':
                         this._mcpClient.logStatus();
                         return;
-                    case 'mcpCall':
-                        // Example: webview requests an MCP call
-                        this._mcpClient.callTool(message.toolName, message.args)
-                            .then((result: any) => {
-                                this._panel.webview.postMessage({ command: 'mcpResult', result, toolName: message.toolName, silent: message.silent });
-                            })
-                            .catch((error: any) => {
-                                this._panel.webview.postMessage({ command: 'mcpError', error: error.message, toolName: message.toolName, silent: message.silent });
-                            });
+                    case 'mcpCall': {
+                        const { toolName, args = {}, silent } = msg;
+                        if (!toolName) return;
+
+                        // If it's a mission-level request, use the centralized executor to wrap in MCPContext
+                        if (toolName === 'run_factory_mission') {
+                            const persona = args.persona || 'captain_picard';
+                            const task = args.task || args.objective || '';
+                            const metadata = args.metadata || {};
+
+                            executeAgentTask(this._mcpClient, persona, task, metadata)
+                                .then((result: any) => {
+                                    this._panel.webview.postMessage({ command: 'mcpResult', result, toolName, silent });
+                                })
+                                .catch((error: any) => {
+                                    this._panel.webview.postMessage({ command: 'mcpError', error: error.message || error, toolName, silent });
+                                });
+                        } else {
+                            // Direct tool call for utilities like health_check or git_operation
+                            this._mcpClient.callTool(toolName, args)
+                                .then((result: any) => {
+                                    this._panel.webview.postMessage({ command: 'mcpResult', result, toolName, silent });
+                                })
+                                .catch((error: any) => {
+                                    this._panel.webview.postMessage({ command: 'mcpError', error: error.message || error, toolName, silent });
+                                });
+                        }
+                        return;
+                    }
+                    default:
+                        console.warn(`[AgentViewport] Unhandled command: ${msg.command}`);
                         return;
                 }
             },
-            null,
+            undefined,
             this._disposables
         );
 
         // Listen for progress events from MCPClient and forward to webview
         this._mcpClient.onProgress(message => {
             this._panel.webview.postMessage({ command: 'progress', message });
-        }, null, this._disposables);
+        }, undefined, this._disposables);
 
         // Listen for disconnect events
         this._mcpClient.onDisconnect(() => {
             this._panel.webview.postMessage({ command: 'disconnected' });
-        }, null, this._disposables);
+        }, undefined, this._disposables);
     }
 
     public dispose() {

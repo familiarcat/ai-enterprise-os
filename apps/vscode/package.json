@@ -34,10 +34,22 @@
   "main": "./out/src/extension.js",
   "contributes": {
     "commands": [
-      { "command": "sovereign.runMission", "title": "Sovereign: Run Factory Mission" },
-      { "command": "sovereign.sensorSweep", "title": "Sovereign: Sensor Sweep" },
-      { "command": "sovereign.healthCheck", "title": "Sovereign: Health Check" },
-      { "command": "sovereign.checkBridgeStatus", "title": "Sovereign: Check Bridge Status" }
+      {
+        "command": "sovereign.runMission",
+        "title": "Sovereign: Run Factory Mission"
+      },
+      {
+        "command": "sovereign.sensorSweep",
+        "title": "Sovereign: Sensor Sweep"
+      },
+      {
+        "command": "sovereign.healthCheck",
+        "title": "Sovereign: Health Check"
+      },
+      {
+        "command": "sovereign.checkBridgeStatus",
+        "title": "Sovereign: Check Bridge Status"
+      }
     ],
     "configuration": {
       "title": "Sovereign Factory",
@@ -51,12 +63,20 @@
     },
     "viewsContainers": {
       "activitybar": [
-        { "id": "sovereign-explorer", "title": "Sovereign Factory", "icon": "$(hubot)" }
+        {
+          "id": "sovereign-explorer",
+          "title": "Sovereign Factory",
+          "icon": "$(hubot)"
+        }
       ]
     },
     "views": {
       "sovereign-explorer": [
-        { "type": "webview", "id": "sovereign.agentViewport", "name": "Agent Viewport" }
+        {
+          "type": "webview",
+          "id": "sovereign.agentViewport",
+          "name": "Agent Viewport"
+        }
       ]
     }
   },
@@ -67,11 +87,14 @@
     "package": "vsce package"
   },
   "devDependencies": {
-    "@types/vscode": "^1.85.0",
     "@types/node": "^20.0.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
-    "typescript": "^5.3.0",
-    "@vscode/vsce": "^2.24.0"
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.24.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "recharts": "^3.8.1"
   }
 }

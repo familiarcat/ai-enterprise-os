@@ -1,6 +1,7 @@
 import * as v from 'vscode';
 import { getMCPClient as getCl } from '../apps/vscode/src/services/MCPClient';
 import { AgentViewportPanel as Avp } from '../apps/vscode/src/views/AgentViewportPanel';
+import { executeAgentTask } from '../apps/vscode/src/views/executor';
 
 export async function executeRunMission(ctx: v.ExtensionContext) {
   const c = getCl();
@@ -44,7 +45,12 @@ export async function executeRunMission(ctx: v.ExtensionContext) {
     cancellable: false
   }, async () => {
     try {
-      const r = await c.runMission(ws, obj, selected.id);
+      // Refactored to use the centralized MCPContext executor
+      const r = await executeAgentTask(c, selected.id, obj, { 
+        project: ws,
+        triggeredBy: 'vscode-command-palette'
+      });
+      
       if (r && typeof r !== 'string' && r.content) {
         const text = r.content.map((i: any) => i.text).join('\n');
         c.outputChannel.appendLine(`[Result] ${text}`);

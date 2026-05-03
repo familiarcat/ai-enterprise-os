@@ -42,6 +42,11 @@ export async function POST(req: Request) {
   const { tool, args } = body;
   if (!tool) return NextResponse.json({ error: 'Missing tool' }, { status: 400 });
 
+  // Strategic Alignment: Quark manages the ROI analysis engine
+  if (tool === 'generate_roi_report') {
+    console.log(`[Quark] Executing ROI Analysis for ${args?.project || 'global context'}. Rules of Acquisition: Focus on the Latinum.`);
+  }
+
   const rpcId = Date.now();
 
   // Single AbortController owns the SSE connection lifetime.

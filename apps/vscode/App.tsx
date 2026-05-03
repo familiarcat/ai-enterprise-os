@@ -19,6 +19,69 @@ const App: React.FC = () => {
     const containerRef = useRef<HTMLDivElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
 
+    const renderLogText = (text: string) => {
+        const marker = '--- [v11 REFLECTION: LT. WORF] ---';
+        if (text && typeof text === 'string' && text.includes(marker)) {
+            const [output, reflection] = text.split(marker);
+            return (
+                <div className="log-text-parsed">
+                    <div className="output-text">{output}</div>
+                    <div className="reflection-block">
+                        <div className="reflection-header">
+                            <Shield size={10} strokeWidth={2.5} />
+                            <span>TACTICAL REFLECTION // LT. WORF</span>
+                        </div>
+                        <div className="reflection-body">{reflection}</div>
+                    </div>
+                </div>
+            );
+        }
+        return text;
+    };
+
+    const formatResultText = (result: any): string => {
+        if (!result) return '';
+        if (typeof result === 'string') return result;
+
+        // Handle MCP-level errors (if tool execution failed at the protocol layer)
+        if (result.isError) {
+            const errorMsg = Array.isArray(result.content) 
+                ? result.content.map((c: any) => c.text).join('\n')
+                : JSON.stringify(result);
+            return `[BRIDGE ERROR] ${errorMsg}`;
+        }
+
+        // Handle standard MCP structured content response
+        if (result.content && Array.isArray(result.content)) {
+            return result.content.map((item: any) => {
+                const itemText = item.text || '';
+                // The bridge often stringifies internal orchestrator results into a text block.
+                // We attempt to parse it to see if it contains a structured mission result.
+                try {
+                    const inner = JSON.parse(itemText);
+                    if (inner && typeof inner === 'object') {
+                        // Orchestrator success with nested content array
+                        if (inner.status === 'SUCCESS' && Array.isArray(inner.content)) {
+                            return inner.content.map((c: any) => c.text).join('\n');
+                        }
+                        // v11 Compliant stored package format (used in RAG recall)
+                        if (inner.output && inner.reflection) {
+                            return `${inner.output}\n\n--- [v11 REFLECTION: LT. WORF] ---\n${inner.reflection}`;
+                        }
+                        if (inner.status === 'ERROR') {
+                            return `[MISSION FAILED] ${inner.error || inner.message || itemText}`;
+                        }
+                    }
+                } catch {
+                    // Not JSON or parsing failed, use raw text
+                }
+                return itemText;
+            }).join('\n');
+        }
+
+        return typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result);
+    };
+
     useEffect(() => {
         const handleMessage = (event: MessageEvent) => {
             const message = event.data;
@@ -48,18 +111,10 @@ const App: React.FC = () => {
             }
 
             // Standardize text extraction for structured results and progress strings
-            let text = message.message || message.text || "";
-            
+            let text = message.message || message.text || message.error || "";
+
             if (message.result) {
-                if (typeof message.result === 'string') {
-                    text = message.result;
-                } else if (message.result.content && Array.isArray(message.result.content)) {
-                    // Handle standard MCP structured content response
-                    text = message.result.content.map((c: any) => c.text).join('\n');
-                } else {
-                    // Fallback for custom or complex result objects
-                    text = JSON.stringify(message.result, null, 2);
-                }
+                text = formatResultText(message.result);
             }
 
             // Process standard logs
@@ -145,6 +200,35 @@ const App: React.FC = () => {
 
     return (
         <div className="sovereign-viewport">
+            <style>{`
+                .reflection-block {
+                    margin-top: 12px;
+                    margin-bottom: 4px;
+                    border: 1px solid var(--vscode-charts-red, #f14c4c);
+                    background: rgba(241, 76, 76, 0.05);
+                    border-left: 3px solid var(--vscode-charts-red, #f14c4c);
+                    padding: 10px;
+                    font-family: var(--vscode-editor-font-family, monospace);
+                    border-radius: 2px;
+                }
+                .reflection-header {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    color: var(--vscode-charts-red, #f14c4c);
+                    font-weight: 800;
+                    font-size: 9px;
+                    letter-spacing: 1px;
+                    margin-bottom: 8px;
+                }
+                .reflection-body {
+                    font-size: 11px;
+                    line-height: 1.5;
+                    white-space: pre-wrap;
+                    color: var(--vscode-editor-foreground, #cccccc);
+                }
+                .output-text { white-space: pre-wrap; }
+            `}</style>
             <header>
                 <div className="header-left">
                     <Activity size={16} className="icon-pulse" />
@@ -176,7 +260,7 @@ const App: React.FC = () => {
                 {logs.map(log => (
                     <div key={log.id} className={`log-entry ${log.type}`}>
                         <span className="timestamp">[{log.timestamp}]</span>
-                        <span className="text">{log.text}</span>
+                        <span className="text">{renderLogText(log.text)}</span>
                     </div>
                 ))}
                 <div ref={scrollRef} />

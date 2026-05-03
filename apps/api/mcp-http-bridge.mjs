@@ -53,6 +53,7 @@ const {
   sensorSweep,
   getMemorySystems,
   integrateMcpTool,
+  generateROIReport,
 } = require('../../core/orchestrator.js');
 
 // ── Star Trek Crew Persona → Agent Role + Model mapping ──────────────────────
@@ -116,9 +117,26 @@ const TOOL_LIST = [
     description: 'Trigger a full mission to analyse evolution and scaffold new DDD domains',
     inputSchema: { 
       type: 'object', 
-      properties: { 
-        context: { type: 'object', description: 'Standardized MCPContext envelope' } 
-      }, 
+      properties: {
+        context: {
+          type: 'object',
+          properties: {
+            sessionId: { type: 'string' },
+            persona: { type: 'string', description: 'Star Trek persona (e.g., captain_picard)' },
+            task: { type: 'string', description: 'The objective of the mission' },
+            memory: {
+              type: 'object',
+              properties: {
+                shortTerm: { type: 'array', items: { type: 'string' } },
+                longTerm: { type: 'array', items: { type: 'string' } }
+              }
+            },
+            constraints: { type: 'array', items: { type: 'string' } },
+            metadata: { type: 'object' }
+          },
+          required: ['sessionId', 'task']
+        }
+      },
       required: ['context'] 
     },
   },
@@ -202,6 +220,14 @@ const TOOL_LIST = [
     description: 'Trigger production deployment for a specific domain (e.g., civic)',
     inputSchema: { type: 'object', properties: { domain: { type: 'string' }, rationale: { type: 'string' } }, required: ['domain', 'rationale'] },
   },
+  {
+    name: 'generate_roi_report',
+    description: 'Quark\'s ROI Analysis: Aggregates mission costs and token usage metadata from Supabase',
+    inputSchema: {
+      type: 'object',
+      properties: { project: { type: 'string', description: 'Optional project ID to filter results' } }
+    },
+  },
 ];
 
 // ── MCP Server factory ────────────────────────────────────────────────────────
@@ -238,9 +264,21 @@ function createMCPServer() {
         result = await invokeUnzipSearchTool(args);
         break;
 
-      case 'run_factory_mission':
-        result = await runMission(args.context);
+      case 'run_factory_mission': {
+        const { context } = args;
+        const personaKey = normalisePersonaKey(context.persona || 'captain_picard');
+        const personaConfig = CREW_PERSONAS[personaKey];
+        const missionContext = {
+          ...context,
+          persona: personaKey,
+          metadata: {
+            ...context.metadata,
+            modelTier: context.metadata?.modelTier || personaConfig?.model
+          }
+        };
+        result = await runMission(missionContext);
         break;
+      }
 
       case 'run_batch_missions':
         result = await runMissions(args.missions, args.limit, (info) => {
@@ -311,6 +349,10 @@ function createMCPServer() {
         });
         // Simulate the internal git-flow merge to main before deploy
         result = await gitOperation('sovereign', 'merge-to-main');
+        break;
+
+      case 'generate_roi_report':
+        result = await generateROIReport(args.project);
         break;
 
       case 'health_check': {

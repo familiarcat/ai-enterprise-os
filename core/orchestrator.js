@@ -10,6 +10,7 @@ const os = require('os');
 
 // Import Memory Systems from the Shared Kernel to resolve circular dependencies
 const { getMemorySystems, resetMemorySystems } = require('./memory.js');
+const { incrementTokenUsage } = require('./repository.js');
 
 /**
  * Verifies the integrity of external memory connections (Redis and Supabase).
@@ -86,14 +87,6 @@ const ROLES = {
   chief_obrien: "You are Chief O'Brien, Chief of Operations. You manage the transporters and system integrations. You implement MCP tools that act as bridges between disparate services, maintaining operational integrity through 'transporter-level' precision.",
   lt_uhura: "You are Lt. Nyota Uhura, Communications Officer. You ensure all frequencies are open. You integrate MCP communication tools from GitMCP for real-time status updates and cross-system sync.",
   tasha_yar: "You are Tasha Yar, Chief of Security and Tactical Officer. Your goal is tactical verification and system readiness. You execute final combat diagnostics and smoke tests to ensure all systems are nominal and ready for engagement.",
-
-  // Legacy Aliases (Backwards Compatibility)
-  ANALYST: "You are an Expert System Analyst. Your goal is to review project evolution and structure to identify patterns.",
-  ARCHITECT: "You are a DDD Architect. Your goal is to validate mission objectives against historical constraints.",
-  DEVELOPER: "You are a Senior Full-Stack Developer. Your goal is to generate clean, production-ready DDD code blocks.",
-  QA_AUDITOR: "You are a Senior QA Auditor. Your goal is to review past mission outcomes and evolutionary history to provide specific technical suggestions for improving the current scaffolding plan.",
-  CRITIC: "You are the System Critic. Your goal is to evaluate mission outcomes, identify technical debt, and suggest systemic improvements.",
-  CREW_MANAGER: "You are a Sovereign Crew Manager. Your goal is to coordinate specialized agents to build, manage, and evolve the AI Enterprise OS itself, following the Product Factory philosophy."
 };
 
 /**
@@ -119,12 +112,6 @@ const MODEL_CONFIG = {
   chief_obrien:    process.env.MODEL_QA_AUDITOR   || 'openai/gpt-4o-mini',
   lt_uhura:        process.env.MODEL_ANALYST      || 'google/gemini-pro-1.5',
   tasha_yar:       process.env.MODEL_ANALYST      || 'google/gemini-flash-1.5',
-
-  // Role-key aliases — resolve to tier defaults, never empty strings
-  ANALYST:   process.env.MODEL_ANALYST    || 'anthropic/claude-3-5-sonnet',
-  ARCHITECT: process.env.MODEL_ARCHITECT  || 'anthropic/claude-3-5-sonnet',
-  DEVELOPER: process.env.MODEL_DEVELOPER  || 'anthropic/claude-3-5-sonnet',
-  CRITIC:    process.env.MODEL_QA_AUDITOR || 'openai/gpt-4o-mini',
 };
 
 /**
@@ -323,29 +310,94 @@ function invokeCrewAgent(options) {
  * @returns {Promise<Object>} Mission results and generated plan.
  */
 async function runMission(context) {
-  const { sessionId, persona, objective, historicalContext, modelTier } = context;
+  // Normalize context from MCPContext interface
+  const { 
+    sessionId, 
+    persona = 'captain_picard', 
+    task,
+    memory = {},
+    constraints = [],
+    metadata = {}
+  } = context;
   
-  console.log(`[Mission] ${persona} engaging objective: ${objective.substring(0, 50)}...`);
+  console.log(`[Captain Picard] Session ${sessionId}: Engaging v11 execution loop for task: ${task.substring(0, 50)}...`);
 
-  // Hydrate historical context if missing
-  const contextWindow = historicalContext || await recallMemory(objective);
+  // Strictly use normalized memory properties
+  const contextWindow = memory.longTerm?.join('\n\n') || await recallMemory(task);
 
   try {
-    // Delegate to the CrewAI bridge via the Python runtime
-    const response = await invokeCrewAgent({
-      objective,
-      persona,
-      context: contextWindow,
-      model: modelTier || MODEL_CONFIG[persona]
-    });
+    let executionResponse = '';
+    let reflectionResponse = '';
+    let attempts = 0;
+    const maxAttempts = 3;
+    let passed = false;
+    let currentTask = task;
 
-    // Persist mission outcome in vector memory
-    await storeMissionResult(response, { sessionId, persona, objective });
+    while (attempts < maxAttempts && !passed) {
+      attempts++;
+      console.log(`[Orchestrator] Attempt ${attempts}/${maxAttempts} for Session ${sessionId}...`);
+
+      // 1. EXECUTION PHASE: Primary agent generates the result
+      executionResponse = await invokeCrewAgent({
+        objective: currentTask,
+        persona,
+        context: contextWindow,
+        model: metadata.modelTier || MODEL_CONFIG[persona],
+        constraints,
+        metadata
+      });
+
+      // 2. REFLECTION PHASE (v11 Architecture): Auditor critiques the output
+      console.log(`[Lt. Worf] Critically evaluating output for Session ${sessionId} (Attempt ${attempts})...`);
+      reflectionResponse = await invokeCrewAgent({
+        objective: `Critically evaluate the following output for the task: "${task}". Provide a quality score (1-10), identify technical weaknesses, and suggest specific improvements for the next iteration.`,
+        persona: 'lt_worf',
+        context: `Initial Output:\n${executionResponse}\n\nHistorical Constraints:\n${constraints.join(', ')}`,
+        model: MODEL_CONFIG.lt_worf,
+        metadata: { ...metadata, stage: 'reflection' }
+      });
+
+      // Parse score from Worf's reflection
+      const scoreMatch = reflectionResponse.match(/score:\s*(\d+)/i);
+      const score = scoreMatch ? parseInt(scoreMatch[1], 10) : 10;
+
+      if (score < 5 && attempts < maxAttempts) {
+        console.warn(`[Lt. Worf] Score ${score} is unacceptable. Initiating self-correction loop...`);
+        // Enrich the next task with the critique for iterative improvement
+        currentTask = `The previous attempt failed evaluation with a score of ${score}/10. 
+Feedback from Lt. Worf to address:
+${reflectionResponse}
+
+Re-implement the following task: "${task}"`;
+      } else {
+        passed = true;
+      }
+    }
+
+    const finalPackage = {
+      output: executionResponse,
+      reflection: reflectionResponse,
+      v11_compliant: true,
+      attempts
+    };
+
+    // 3. STORAGE PHASE: Persist both execution and reflection for semantic memory
+    await storeMissionResult(JSON.stringify(finalPackage), { 
+      ...metadata, 
+      sessionId, 
+      persona, 
+      task,
+      timestamp: new Date().toISOString()
+    });
 
     return {
       status: 'SUCCESS',
-      content: [{ type: 'text', text: response }],
-      plan: objective
+      content: [
+        { type: 'text', text: executionResponse },
+        { type: 'text', text: `\n\n--- [V11 REFLECTION: LT. WORF] ---\n${reflectionResponse}` }
+      ],
+      plan: task,
+      reflection: reflectionResponse
     };
   } catch (err) {
     console.error(`[Orchestrator] Mission failure: ${err.message}`);
@@ -541,10 +593,12 @@ async function integrateMcpTool(project, query, persona = 'captain_picard', depl
   const missionResult = await runMission({
     sessionId: `pinnacle-${Date.now()}`,
     persona,
-    objective: uiObjective,
-    historicalContext: await recallMemory(uiObjective),
-    modelTier: MODEL_CONFIG[persona],
-    metadata: { project, ...deploymentConfig }
+    task: uiObjective,
+    memory: {
+      shortTerm: [],
+      longTerm: [await recallMemory(uiObjective)]
+    },
+    metadata: { project, ...deploymentConfig, modelTier: MODEL_CONFIG[persona] }
   });
 
   return {
@@ -694,13 +748,13 @@ async function generateEmbedding(text) {
 /**
  * Recalls historical data from both 'missions' and 'observations' tables.
  */
-async function recallMemory(objective, category = null) {
+async function recallMemory(task, category = null) {
   const { redis, supabase } = getMemorySystems();
-  const cacheKey = `memory:context:${category || 'all'}:${Buffer.from(objective).toString('hex').substring(0, 32)}`;
+  const cacheKey = `memory:context:${category || 'all'}:${Buffer.from(task).toString('hex').substring(0, 32)}`;
   try {
     const cachedResult = await redis.get(cacheKey);
     if (cachedResult) return cachedResult;
-    const embedding = await generateEmbedding(objective);
+    const embedding = await generateEmbedding(task);
     if (!embedding) return "Memory recall unavailable.";
     const matchParams = { query_embedding: embedding, match_threshold: 0.4, match_count: 5 };
     const [missionRes, observationRes] = await Promise.all([
@@ -724,15 +778,138 @@ async function storeMissionResult(content, metadata = {}) {
     const { supabase } = getMemorySystems();
     const embedding = await generateEmbedding(content);
     if (!embedding) return;
-    await supabase.from('missions').insert([{ content, metadata, embedding }]);
+
+    // 1. Calculate Token and Cost Estimates (v11 Economics)
+    const tokenEstimate = Math.ceil(content.length / 4); // Standard heuristic
+    const persona = metadata.persona || 'captain_picard';
+    const modelUsed = metadata.modelTier || MODEL_CONFIG[persona] || 'anthropic/claude-3-haiku';
+    
+    // Pricing per 1M tokens (OpenRouter benchmarks)
+    const pricingMap = {
+      'anthropic/claude-3-opus': 15.00,
+      'anthropic/claude-3-5-sonnet': 3.00,
+      'anthropic/claude-3-haiku': 0.25,
+      'openai/gpt-4o-mini': 0.15,
+      'google/gemini-flash-1.5': 0.075,
+      'google/gemini-pro-1.5': 3.50,
+    };
+
+    const costPerMillion = pricingMap[modelUsed] || 3.00; // Default to mid-tier
+    const costEstimateUsd = (tokenEstimate / 1_000_000) * costPerMillion;
+
+    const enrichedMetadata = {
+      ...metadata,
+      token_estimate: tokenEstimate,
+      cost_usd: costEstimateUsd,
+      model_identity: modelUsed,
+      factory_version: 'v11.0'
+    };
+
+    await supabase.from('missions').insert([{ 
+      content, 
+      metadata: enrichedMetadata, 
+      embedding 
+    }]);
+
+    // 2. Increment global project billing (v11 Economics)
+    const projectId = metadata.project || 'sovereign';
+    await incrementTokenUsage(projectId, tokenEstimate);
+    
+    console.log(`[Quark] Mission persisted. Estimated Cost: $${costEstimateUsd.toFixed(6)} (${tokenEstimate} tokens)`);
   } catch (err) {
     console.error("[Orchestrator] Failed to store mission result:", err.message);
   }
+}
+
+/**
+ * Quark's ROI Analysis Engine: Aggregates cost_usd from the missions table.
+ * Provides a breakdown of resource allocation and model arbitrage efficiency.
+ */
+async function generateROIReport(project = null) {
+  const { supabase } = getMemorySystems();
+  
+  let query = supabase
+    .from('missions')
+    .select('metadata');
+
+  if (project) {
+    query = query.eq('metadata->project', project);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(`[Quark] Failed to retrieve ROI data: ${error.message}`);
+  }
+
+  let totalCost = 0;
+  const personaBreakdown = {};
+  const projectBreakdown = {};
+  const projectPersonaBreakdown = {};
+  const timeSeriesMap = {};
+
+  (data || []).forEach(row => {
+    const meta = row.metadata || {};
+    const cost = parseFloat(meta.cost_usd || 0);
+    const persona = meta.persona || 'unknown';
+    const proj = meta.project || 'unknown';
+
+    const dateStr = meta.timestamp ? meta.timestamp.split('T')[0] : null;
+    if (dateStr) timeSeriesMap[dateStr] = (timeSeriesMap[dateStr] || 0) + cost;
+    
+    totalCost += cost;
+    
+    if (!personaBreakdown[persona]) {
+      personaBreakdown[persona] = { count: 0, cost_usd: 0 };
+    }
+    personaBreakdown[persona].count += 1;
+    personaBreakdown[persona].cost_usd += cost;
+
+    if (!projectBreakdown[proj]) {
+      projectBreakdown[proj] = { count: 0, cost_usd: 0 };
+    }
+    projectBreakdown[proj].count += 1;
+    projectBreakdown[proj].cost_usd += cost;
+
+    if (!projectPersonaBreakdown[proj]) {
+      projectPersonaBreakdown[proj] = {};
+    }
+    if (!projectPersonaBreakdown[proj][persona]) {
+      projectPersonaBreakdown[proj][persona] = { count: 0, cost_usd: 0 };
+    }
+    projectPersonaBreakdown[proj][persona].count += 1;
+    projectPersonaBreakdown[proj][persona].cost_usd += cost;
+  });
+
+  // Generate continuous 30-day time series
+  const time_series = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const s = d.toISOString().split('T')[0];
+    time_series.push({ date: s, cost: timeSeriesMap[s] || 0 });
+  }
+
+  return {
+    status: 'SUCCESS',
+    report: {
+      project: project || 'global',
+      total_missions: data ? data.length : 0,
+      total_cost_usd: totalCost,
+      average_cost_per_mission: (data && data.length > 0) ? totalCost / data.length : 0,
+      persona_breakdown: personaBreakdown,
+      project_breakdown: projectBreakdown,
+      project_persona_breakdown: projectPersonaBreakdown,
+      time_series,
+      currency: 'USD',
+      generated_at: new Date().toISOString()
+    }
+  };
 }
 
 module.exports = { 
   runMission, invokeUnzipSearchTool, invokeCrewAgent, sensorSweep,
   integrateMcpTool, worfSecurityAudit, gitOperation, 
   verifyIntegrity, listAvailableMCPs, syncMCPRegistry, worfSecurityScan, gitmcpSearch,
-  recallMemory, storeMissionResult, generateEmbedding
+  recallMemory, storeMissionResult, generateEmbedding, generateROIReport
 };
