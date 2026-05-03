@@ -23,7 +23,7 @@ async function verifyIntegrity() {
   const envPath = path.resolve(__dirname, '../.env');
   const envExists = fs.existsSync(envPath);
   const requiredVars = ['REDIS_URL', 'SUPABASE_URL', 'SUPABASE_KEY', 'OPENROUTER_API_KEY', 'PYTHON_BIN'];
-  const missingVars = requiredVars.filter(v => !process.env[v]);
+  const missingVars = requiredVars.filter(v => !process.env[v] || process.env[v].includes('REPLACE_WITH_ACTUAL'));
 
   if (!envExists) {
     report.env = 'error: .env file is missing at project root';

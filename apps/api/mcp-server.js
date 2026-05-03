@@ -1,4 +1,5 @@
 const path = require("path");
+const fs = require("fs");
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const { Server } = require("@modelcontextprotocol/sdk/server/index.js");
@@ -6,7 +7,7 @@ const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio
 const { CallToolRequestSchema, ListToolsRequestSchema } = require("@modelcontextprotocol/sdk/types.js");
 const { 
   invokeUnzipSearchTool, invokeCrewAgent, gitOperation, verifyIntegrity, 
-  listAvailableMCPs, syncMCPRegistry, worfSecurityScan, generateROIReport 
+  listAvailableMCPs, syncMCPRegistry, worfSecurityScan, generateROIReport, sensorSweep 
 } = require("../../core/orchestrator.js");
 const {
   runMission, runMissions, getVersionsHierarchy,
@@ -217,6 +218,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         type: "object",
         properties: { project: { type: "string", description: "Optional project ID to filter results" } }
       }
+    },
+    {
+      name: "sensor_sweep",
+      description: "Perform a comprehensive architectural scan of all components, domains, and system integrity.",
+      inputSchema: { type: "object", properties: {} }
     }
   ]
 }));
@@ -261,6 +267,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     result = await gitOperation(args.project, args.action, args.message);
   } else if (name === "generate_roi_report") {
     result = await generateROIReport(args.project);
+  } else if (name === "sensor_sweep") {
+    result = await sensorSweep();
   } else if (name === "list_available_mcps") {
     result = await listAvailableMCPs(args.sync);
   } else if (name === "sync_mcp_registry") {
