@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Terminal, Shield, Cpu, Activity, Trash2, Wifi, WifiOff, RefreshCw, Settings, ArrowUp, Info, Download } from 'lucide-react';
+import { Shield, Cpu, Activity, Trash2, Wifi, WifiOff, RefreshCw, Settings, ArrowUp, Info, Download } from 'lucide-react';
 
 declare const acquireVsCodeApi: () => any;
 const vscode = acquireVsCodeApi();

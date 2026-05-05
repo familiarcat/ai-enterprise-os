@@ -39,343 +39,39 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 require('dotenv').config({ path: resolve(__dirname, '../../.env'), override: true });
 
 const {
-  invokeUnzipSearchTool,
-  runMission,
-  runMissions,
-  gitmcpSearch,
-  getVersionsHierarchy,
-  manageProject,
-  manageSprint,
-  manageTask,
-  invokeCrewAgent,
-  gitOperation,
-  verifyIntegrity,
-  sensorSweep,
-  getMemorySystems,
-  integrateMcpTool,
-  generateROIReport,
+  handleToolCall,
+  CREW_PERSONAS,
+  getMemorySystems
 } = require('../../core/orchestrator.js');
-
-// ── Star Trek Crew Persona → Agent Role + Model mapping ──────────────────────
-// These personas come from openrouter-crew-platform's .env webhook system.
-// Each is mapped to the cheapest OpenRouter model that fits the role's
-// cognitive demands, honouring the $1.50/execution budget target.
-const CREW_PERSONAS = {
-  captain_picard:    { role: 'Sovereign Crew Manager',     goal: 'Provide strategic direction and coordinate the crew toward mission success', model: process.env.MODEL_CREW_MANAGER  || 'anthropic/claude-3-haiku' },
-  commander_data:    { role: 'DDD Architect',               goal: 'Validate structural decisions and enforce architectural constraints',        model: process.env.MODEL_ARCHITECT     || 'anthropic/claude-3-haiku' },
-  commander_riker:   { role: 'Senior Full-Stack Developer', goal: 'Implement mission-critical features with production quality',                model: process.env.MODEL_DEVELOPER     || 'anthropic/claude-3-5-sonnet' },
-  geordi_la_forge:   { role: 'Senior Full-Stack Developer', goal: 'Engineer robust systems and solve complex technical problems',               model: process.env.MODEL_DEVELOPER     || 'anthropic/claude-3-5-sonnet' },
-  chief_obrien:      { role: 'Senior Full-Stack Developer', goal: 'Integrate components and ensure reliable implementation',                    model: process.env.MODEL_INTEGRATION   || 'openai/gpt-4o-mini' },
-  lt_worf:           { role: 'Senior QA Auditor',           goal: 'Aggressively challenge every assumption and find failure modes',             model: process.env.MODEL_QA_AUDITOR    || 'openai/gpt-4o-mini' },
-  counselor_troi:    { role: 'Expert System Analyst',       goal: 'Interpret user intent and surface UX signal from data patterns',            model: process.env.MODEL_ANALYST       || 'anthropic/claude-3-haiku' },
-  dr_crusher:        { role: 'Expert System Analyst',       goal: 'Diagnose system health and prescribe corrective actions',                   model: process.env.MODEL_ANALYST       || 'anthropic/claude-3-haiku' },
-  lt_uhura:          { role: 'Expert System Analyst',       goal: 'Analyze communication patterns and cross-system integration signals',        model: process.env.MODEL_ANALYST       || 'google/gemini-flash-1.5' },
-  quark:             { role: 'Expert System Analyst',       goal: 'Maximize ROI, minimize cost, exploit arbitrage opportunities in model routing', model: process.env.MODEL_COST_OPT  || 'google/gemini-flash-1.5' },
-};
-
-// Normalise a crew name to its persona key (handles spaces, case, dashes)
-function normalisePersonaKey(name) {
-  return name
-    .toLowerCase()
-    .replace(/^(captain|commander|lieutenant|lt\.|lt|counselor|dr\.|dr|chief)\s+/, (_, prefix) => {
-      const map = { captain: 'captain', commander: 'commander', lieutenant: 'lt', 'lt.': 'lt', lt: 'lt', counselor: 'counselor', 'dr.': 'dr', dr: 'dr', chief: 'chief' };
-      return (map[prefix.trim()] || prefix.trim()) + '_';
-    })
-    .replace(/[\s\-]+/g, '_')
-    .replace(/[^a-z0-9_]/g, '');
-}
-
-/**
- * Enrich a run_crew_agent agents[] array with persona defaults.
- * Agents that already have an explicit model keep it; persona-matched
- * agents get the cost-optimised model injected.
- */
-function enrichAgentsWithPersonas(agents = []) {
-  return agents.map((agent) => {
-    const key = normalisePersonaKey(agent.persona || agent.role || '');
-    const persona = CREW_PERSONAS[key];
-    if (!persona) return agent;
-    return {
-      role:      agent.role      || persona.role,
-      goal:      agent.goal      || persona.goal,
-      backstory: agent.backstory || `You are ${(agent.persona || agent.role)}, a specialist in the Sovereign Factory crew.`,
-      model:     agent.model     || persona.model,  // per-agent model override
-      ...agent,
-    };
-  });
-}
-
-// ── Tool definitions (shared across all Server instances) ────────────────────
-const TOOL_LIST = [
-  {
-    name: 'search_code',
-    description: 'Search for functions, classes, or patterns in a zip or folder',
-    inputSchema: { type: 'object', properties: { path: { type: 'string' }, function_name: { type: 'string' }, item_type: { type: 'string', enum: ['function', 'class', 'type', 'enum'] } }, required: ['path', 'function_name'] },
-  },
-  {
-    name: 'run_factory_mission',
-    description: 'Trigger a full mission to analyse evolution and scaffold new DDD domains',
-    inputSchema: { 
-      type: 'object', 
-      properties: {
-        context: {
-          type: 'object',
-          properties: {
-            sessionId: { type: 'string' },
-            persona: { type: 'string', description: 'Star Trek persona (e.g., captain_picard)' },
-            task: { type: 'string', description: 'The objective of the mission' },
-            memory: {
-              type: 'object',
-              properties: {
-                shortTerm: { type: 'array', items: { type: 'string' } },
-                longTerm: { type: 'array', items: { type: 'string' } }
-              }
-            },
-            constraints: { type: 'array', items: { type: 'string' } },
-            metadata: { type: 'object' }
-          },
-          required: ['sessionId', 'task']
-        }
-      },
-      required: ['context'] 
-    },
-  },
-  {
-    name: 'run_batch_missions',
-    description: 'Trigger multiple missions concurrently and return a summary of pnpm recursive tests across generated domains',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        missions: { type: 'array', items: { type: 'object', properties: { project: { type: 'string' }, objective: { type: 'string' } }, required: ['project', 'objective'] } },
-        limit: { type: 'number', description: 'Maximum concurrent missions (default 5)' },
-      },
-      required: ['missions'],
-    },
-  },
-  {
-    name: 'get_versions_hierarchy',
-    description: 'Extract a structured JSON hierarchy of all project versions in the /versions folder',
-    inputSchema: { type: 'object', properties: {} },
-  },
-  {
-    name: 'manage_project',
-    description: 'Initialise or update project-level metadata and context',
-    inputSchema: { type: 'object', properties: { project: { type: 'string' }, action: { type: 'string', enum: ['create', 'update', 'archive'] }, details: { type: 'object' } }, required: ['project', 'action'] },
-  },
-  {
-    name: 'manage_sprint',
-    description: 'Manage Agile sprints (create, start, or close) within a project',
-    inputSchema: { type: 'object', properties: { project: { type: 'string' }, action: { type: 'string', enum: ['create', 'start', 'close'] }, sprint_name: { type: 'string' }, details: { type: 'object' } }, required: ['project', 'action', 'sprint_name'] },
-  },
-  {
-    name: 'manage_task',
-    description: 'Create, move, or assign tasks within a project or sprint',
-    inputSchema: { type: 'object', properties: { project: { type: 'string' }, action: { type: 'string', enum: ['create', 'assign', 'move', 'complete'] }, task_id: { type: 'string' }, details: { type: 'object' } }, required: ['project', 'action'] },
-  },
-  {
-    name: 'run_crew_agent',
-    description: 'Execute a complex multi-agent CrewAI workflow. Agents can specify a "persona" (Star Trek crew name) to auto-select the cost-optimised model for that role.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        objective: { type: 'string' },
-        agents: {
-          type: 'array',
-          items: {
-            type: 'object',
-            description: 'Agent config. Include "persona" (e.g. "Geordi La Forge") to auto-map role+model.',
-          },
-        },
-      },
-      required: ['objective', 'agents'],
-    },
-  },
-  {
-    name: 'health_check',
-    description: 'Verify the integrity of the workspace, environment variables, and memory systems',
-    inputSchema: { type: 'object', properties: { fix: { type: 'boolean' }, rebuildVenv: { type: 'boolean' } } },
-  },
-  {
-    name: 'git_operation',
-    description: 'Perform git actions (commit, push, status) to save platform progress',
-    inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['commit', 'push', 'status', 'branch', 'merge-to-main'] }, message: { type: 'string' } }, required: ['action'] },
-  },
-  {
-    name: 'sensor_sweep',
-    description: 'Perform a comprehensive architectural scan of all components, domains, and system integrity',
-    inputSchema: { type: 'object', properties: {} },
-  },
-  {
-    name: 'gitmcp_search',
-    description: 'Search https://gitmcp.io/ for verified MCP server implementations and documentation',
-    inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
-  },
-  {
-    name: 'integrate_mcp_tool',
-    description: 'Autonomous integration: Search GitMCP, clear via Worf, and visually add tool to project UI',
-    inputSchema: { type: 'object', properties: { project: { type: 'string' }, query: { type: 'string' }, persona: { type: 'string' }, deploymentConfig: { type: 'object', properties: { subdomain: { type: 'string' }, isLandingPage: { type: 'boolean' } } } }, required: ['project', 'query'] },
-  },
-  {
-    name: 'deploy_production',
-    description: 'Trigger production deployment for a specific domain (e.g., civic)',
-    inputSchema: { type: 'object', properties: { domain: { type: 'string' }, rationale: { type: 'string' } }, required: ['domain', 'rationale'] },
-  },
-  {
-    name: 'generate_roi_report',
-    description: 'Quark\'s ROI Analysis: Aggregates mission costs and token usage metadata from Supabase',
-    inputSchema: {
-      type: 'object',
-      properties: { project: { type: 'string', description: 'Optional project ID to filter results' } }
-    },
-  },
-];
+const { TOOL_DEFINITIONS } = require('../../core/tools.js');
 
 // ── MCP Server factory ────────────────────────────────────────────────────────
-// Creates a fully wired Server instance for one SSE session. A closure
-// over `serverRef` lets batch-mission progress notifications reach the
-// correct SSE channel without a global lookup.
-
 function createMCPServer() {
-  const serverRef = { instance: null };
-
   const server = new Server(
     { name: 'sovereign-factory', version: '1.0.0' },
     { capabilities: { tools: {}, logging: {} } }
   );
 
-  serverRef.instance = server;
-
   // ── List tools ──────────────────────────────────────────────────────────
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOL_LIST }));
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOL_DEFINITIONS }));
 
   // ── Execute tools ───────────────────────────────────────────────────────
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
-    const LLM_TOOLS = ['run_factory_mission', 'run_batch_missions', 'run_crew_agent', 'search_code'];
-    if (LLM_TOOLS.includes(name) && !process.env.OPENROUTER_API_KEY) {
-      return { isError: true, content: [{ type: 'text', text: `Error: OPENROUTER_API_KEY is not set on the MCP bridge. Required for tool: ${name}` }] };
-    }
-
-    let result;
-
-    switch (name) {
-      case 'search_code':
-        result = await invokeUnzipSearchTool(args);
-        break;
-
-      case 'run_factory_mission': {
-        const { context } = args;
-        const personaKey = normalisePersonaKey(context.persona || 'captain_picard');
-        const personaConfig = CREW_PERSONAS[personaKey];
-        const missionContext = {
-          ...context,
-          persona: personaKey,
-          metadata: {
-            ...context.metadata,
-            modelTier: context.metadata?.modelTier || personaConfig?.model
-          }
-        };
-        result = await runMission(missionContext);
-        break;
-      }
-
-      case 'run_batch_missions':
-        result = await runMissions(args.missions, args.limit, (info) => {
-          // Stream progress events back through this session's SSE channel
+    try {
+      const result = await handleToolCall(name, args, {
+        notify: (msg) => {
           server.notification({
             method: 'notifications/message',
-            params: {
-              level: 'info',
-              logger: 'SovereignFactory',
-              data: `[Batch] ${info.index + 1}/${info.total}: ${info.objective}`,
-            },
+            params: { level: 'info', logger: 'SovereignFactory', data: msg },
           });
-        });
-        break;
-
-      case 'get_versions_hierarchy':
-        result = await getVersionsHierarchy();
-        break;
-
-      case 'manage_project':
-        result = await manageProject(args.project, args.action, args.details);
-        break;
-
-      case 'manage_sprint':
-        result = await manageSprint(args.project, args.action, args.sprint_name, args.details);
-        break;
-
-      case 'manage_task':
-        result = await manageTask(args.project, args.action, args.task_id, args.details);
-        break;
-
-      case 'run_crew_agent': {
-        // Inject Star Trek persona → role/goal/backstory/model before handing
-        // off to the Python CrewAI engine, enabling per-character cost routing.
-        const enrichedArgs = {
-          ...args,
-          agents: enrichAgentsWithPersonas(args.agents || []),
-        };
-        result = await invokeCrewAgent(enrichedArgs);
-        break;
-      }
-
-      case 'git_operation':
-        result = await gitOperation(args.project, args.action, args.message);
-        break;
-
-      case 'sensor_sweep':
-        result = await sensorSweep();
-        break;
-
-      case 'gitmcp_search':
-        result = await gitmcpSearch(args.query);
-        break;
-
-      case 'integrate_mcp_tool':
-        result = await integrateMcpTool(args.project, args.query, args.persona, args.deploymentConfig);
-        break;
-
-      case 'deploy_production':
-        // This tool triggers a workflow dispatch on GitHub to start the CI/CD for the specific domain
-        server.notification({
-          method: 'notifications/message',
-          params: {
-            level: 'info',
-            logger: 'SovereignFactory',
-            data: `[Deploy] Initiating production release for ${args.domain}.Rationale: ${args.rationale}`,
-          },
-        });
-        // Simulate the internal git-flow merge to main before deploy
-        result = await gitOperation('sovereign', 'merge-to-main');
-        break;
-
-      case 'generate_roi_report':
-        result = await generateROIReport(args.project);
-        break;
-
-      case 'health_check': {
-        const { spawnSync } = require('child_process');
-        const scriptPath = resolve(__dirname, '../../scripts/verify_health.sh');
-        const scriptArgs = [scriptPath];
-        if (args.fix) scriptArgs.push('--fix');
-        if (args.rebuildVenv) scriptArgs.push('--rebuild');
-        const check = spawnSync('zsh', scriptArgs);
-        const integrity = await verifyIntegrity();
-        result = {
-          status: (check.status === 0 && Object.values(integrity).every(v => v === 'healthy')) ? 'healthy' : 'degraded',
-          python_report: check.stdout?.toString() || '',
-          memory_systems: integrity,
-        };
-        break;
-      }
-
-      default:
-        return { isError: true, content: [{ type: 'text', text: `Unknown tool: ${name}` }] };
+        }
+      });
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { isError: true, content: [{ type: 'text', text: err.message }] };
     }
-
-    return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
   });
 
   return server;

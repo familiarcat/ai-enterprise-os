@@ -118,6 +118,31 @@ const MODEL_CONFIG = {
 };
 
 /**
+ * Persona Registry for Tool Enrichment
+ * Unified source for roles and goals used by CrewAI and Mission logic.
+ */
+const CREW_PERSONAS = {
+  captain_picard:    { role: 'Sovereign Crew Manager',     goal: 'Provide strategic direction and coordinate the crew toward mission success', model: MODEL_CONFIG.captain_picard },
+  commander_data:    { role: 'DDD Architect',               goal: 'Validate structural decisions and enforce architectural constraints',        model: MODEL_CONFIG.commander_data },
+  commander_riker:   { role: 'Senior Full-Stack Developer', goal: 'Implement mission-critical features with production quality',                model: MODEL_CONFIG.commander_riker },
+  geordi_la_forge:   { role: 'Senior Full-Stack Developer', goal: 'Engineer robust systems and solve complex technical problems',               model: MODEL_CONFIG.geordi_la_forge },
+  chief_obrien:      { role: 'Senior Full-Stack Developer', goal: 'Integrate components and ensure reliable implementation',                    model: MODEL_CONFIG.chief_obrien },
+  lt_worf:           { role: 'Senior QA Auditor',           goal: 'Aggressively challenge every assumption and find failure modes',             model: MODEL_CONFIG.lt_worf },
+  counselor_troi:    { role: 'Expert System Analyst',       goal: 'Interpret user intent and surface UX signal from data patterns',            model: MODEL_CONFIG.counselor_troi },
+  dr_crusher:        { role: 'Expert System Analyst',       goal: 'Diagnose system health and prescribe corrective actions',                   model: MODEL_CONFIG.dr_crusher },
+  lt_uhura:          { role: 'Expert System Analyst',       goal: 'Analyze communication patterns and cross-system integration signals',        model: MODEL_CONFIG.lt_uhura },
+  quark:             { role: 'Expert System Analyst',       goal: 'Maximize ROI, minimize cost, exploit arbitrage opportunities in model routing', model: MODEL_CONFIG.quark },
+};
+
+function normalisePersonaKey(name) {
+  if (!name) return 'captain_picard';
+  return name.toLowerCase()
+    .replace(/^(captain|commander|lieutenant|lt\.|lt|counselor|dr\.|dr|chief)\s+/, '')
+    .replace(/[\s\-]+/g, '_')
+    .replace(/[^a-z0-9_]/g, '');
+}
+
+/**
  * Worf Exclusion List: Paths that are exempt from security credential scanning.
  * These are typically documentation, archives, or remediation scripts that 
  * contain placeholders or historical references.
@@ -132,7 +157,10 @@ const WORF_EXCLUSIONS = [
   'AI_ENTERPRISE_OS_ANALYSIS.md',
   'CLAUDE.md',
   'README.md',
-  'PLATFORM_CONSTITUTION.md'
+  'PLATFORM_CONSTITUTION.md',
+  'apps/vscode/media/',
+  'apps/vscode/out/',
+  'dist/'
 ];
 
 /**
@@ -738,6 +766,26 @@ function worfSecurityAudit(mcp) {
 }
 
 /**
+ * Lists all available .skill files in the orchestrator core.
+ */
+function listSkills() {
+  const skillsPath = path.resolve(__dirname, 'skills');
+  return fs.existsSync(skillsPath) ? fs.readdirSync(skillsPath).filter(f => f.endsWith('.skill')) : [];
+}
+
+/**
+ * Retrieves the content of a specific .skill file.
+ * @param {string} name - Name of the skill file.
+ */
+function getSkill(name) {
+  const fileName = name.endsWith('.skill') ? name : `${name}.skill`;
+  const skillPath = path.resolve(__dirname, 'skills', fileName);
+  
+  if (!fs.existsSync(skillPath)) return { error: "Skill not found" };
+  return fs.readFileSync(skillPath, 'utf-8');
+}
+
+/**
  * Generates a vector embedding for a given text using OpenRouter.
  */
 async function generateEmbedding(text) {
@@ -917,6 +965,114 @@ async function generateROIReport(project = null) {
 }
 
 /**
+ * Unified Tool Dispatcher
+ * This is the "Single Point of Execution" for all MCP tools.
+ * Both stdio and HTTP servers call this to ensure identical behavior.
+ */
+async function handleToolCall(name, args, { notify = () => {} } = {}) {
+  // Security/Config Guards
+  const LLM_TOOLS = ['run_factory_mission', 'run_batch_missions', 'run_crew_agent', 'search_code'];
+  if (LLM_TOOLS.includes(name) && !process.env.OPENROUTER_API_KEY) {
+    throw new Error(`OPENROUTER_API_KEY is not set. Required for tool: ${name}`);
+  }
+
+  switch (name) {
+    case 'search_code':
+      return await invokeUnzipSearchTool(args);
+
+    case 'run_factory_mission': {
+      const context = args.context || args; // Support both flat and wrapped args
+      const personaKey = normalisePersonaKey(context.persona);
+      const personaConfig = CREW_PERSONAS[personaKey];
+      return await runMission({
+        ...context,
+        persona: personaKey,
+        metadata: {
+          ...context.metadata,
+          modelTier: context.metadata?.modelTier || personaConfig?.model
+        }
+      });
+    }
+
+    case 'run_batch_missions':
+      return await runMissions(args.missions, args.limit, (info) => {
+        notify(`[Batch] ${info.index + 1}/${info.total}: ${info.objective}`);
+      });
+
+    case 'get_versions_hierarchy':
+      return await getVersionsHierarchy();
+
+    case 'manage_project':
+      return await manageProject(args.project, args.action, args.details);
+
+    case 'manage_sprint':
+      return await manageSprint(args.project, args.action, args.sprint_name, args.details);
+
+    case 'manage_task':
+      return await manageTask(args.project, args.action, args.task_id, args.details);
+
+    case 'run_crew_agent':
+      return await invokeCrewAgent({
+        ...args,
+        agents: (args.agents || []).map(agent => {
+          const key = normalisePersonaKey(agent.persona || agent.role || '');
+          const persona = CREW_PERSONAS[key];
+          if (!persona) return agent;
+          return {
+            role: agent.role || persona.role,
+            goal: agent.goal || persona.goal,
+            model: agent.model || persona.model,
+            ...agent
+          };
+        })
+      });
+
+    case 'git_operation':
+      return await gitOperation(args.project, args.action, args.message);
+
+    case 'list_skills':
+      return listSkills();
+
+    case 'get_skill':
+      return getSkill(args.name);
+
+    case 'worf_security_scan':
+      return worfSecurityScan(args.files, path.resolve(__dirname, '..'));
+
+    case 'list_available_mcps':
+      return await listAvailableMCPs(args.sync);
+
+    case 'sync_mcp_registry':
+      return await syncMCPRegistry();
+
+    case 'sensor_sweep':
+      return await sensorSweep();
+
+    case 'gitmcp_search':
+      return await gitmcpSearch(args.query);
+
+    case 'discover_mcp_tools':
+      return await discoverMcpTools(args.query, args.persona);
+
+    case 'integrate_mcp_tool':
+      return await integrateMcpTool(args.project, args.query, args.persona, args.deploymentConfig);
+
+    case 'generate_roi_report':
+      return await generateROIReport(args.project);
+
+    case 'deploy_production':
+      return { status: "INITIATED", message: `Release for ${args.domain} dispatched.` };
+
+    case 'health_check':
+      const integrity = await verifyIntegrity();
+      return { status: Object.values(integrity).every(v => v === 'healthy') ? 'healthy' : 'degraded', memory_systems: integrity };
+
+    default:
+      throw new Error(`Unknown tool: ${name}`);
+  }
+}
+
+/**
  * runMissions: Executes multiple missions concurrently.
  * Placeholder for Phase 2 migration.
  */
@@ -995,5 +1151,7 @@ module.exports = {
   integrateMcpTool, worfSecurityAudit, gitOperation, 
   verifyIntegrity, listAvailableMCPs, syncMCPRegistry, worfSecurityScan, gitmcpSearch, generateROIReport,
   recallMemory, storeMissionResult, generateEmbedding,
-  runMissions, getVersionsHierarchy, manageProject, manageSprint, manageTask // Explicitly exported
+  runMissions, getVersionsHierarchy, manageProject, manageSprint, manageTask,
+  listSkills, getSkill,
+  handleToolCall, CREW_PERSONAS // Export centralized handler
 };

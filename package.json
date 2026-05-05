@@ -1,41 +1,12 @@
 {
   "name": "ai-enterprise-os-root",
   "private": true,
-  "packageManager": "pnpm@8.15.4",
   "scripts": {
-    "dev": "turbo dev --parallel",
-    "dev:ui": "pnpm --filter @apps/dashboard dev",
-    "dev:all": "turbo run dev",
-    "test": "turbo test",
-    "test:watch": "vitest",
-    "mcp": "node apps/api/mcp-server.js",
-    "mcp:inspect": "npx @modelcontextprotocol/inspector node apps/api/mcp-server.js",
-    "build": "turbo build",
-    "lint": "turbo lint",
-    "prune:scan": "node scripts/engineering/neural-pruning.js",
-    "security:redact": "node scripts/security/worf-redactor.js",
-    "ddd:cleanup": "rm MissionDTO.js MissionRepository.js mission-events.test.js dishonorable-test.js apps/api/MissionSubscriber.js scripts/MissionService.js",
-    "setup:python": "python3 -m venv .venv && . .venv/bin/activate && pip install --upgrade pip && PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 pip install crewai pydantic",
-    "git_operation": "node -e \"const { gitOperation } = require('./core/orchestrator'); const [, action, message] = process.argv; gitOperation('sovereign', action, message).then(res => console.log(res)).catch(e => { console.error(e.message); process.exit(1); })\" --",
-    "run_mission": "node -e \"const { runMission } = require('./core/orchestrator'); const [, objective, persona] = process.argv; runMission({ sessionId: 'cli', persona: persona || 'captain_picard', objective }).then(res => console.log(JSON.stringify(res, null, 2))).catch(e => { console.error(e.message); process.exit(1); })\" --",
-    "sensor_sweep": "node -e \"const { sensorSweep } = require('./core/orchestrator'); sensorSweep().then(res => console.log(JSON.stringify(res, null, 2))).catch(e => { console.error(e.message); process.exit(1); })\"",
-    "health_check": "node -e \"const { verifyIntegrity } = require('./core/orchestrator'); verifyIntegrity().then(res => console.log(JSON.stringify(res, null, 2))).catch(e => { console.error(e.message); process.exit(1); })\""
-  },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^0.6.0",
-    "@supabase/supabase-js": "^2.39.0",
-    "dotenv": "^16.6.1",
-    "express": "^4.18.2",
-    "ioredis": "^5.3.2"
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "clean": "turbo run clean && rm -rf node_modules"
   },
   "devDependencies": {
-    "vitest": "^1.6.1",
-    "turbo": "^1.10.0"
-  },
-  "workspaces": [
-    "apps/*",
-    "packages/*",
-    "domains/*",
-    "core"
-  ]
+    "turbo": "^1.12.0"
+  }
 }

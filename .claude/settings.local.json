@@ -10,7 +10,11 @@
       "Bash(.venv/bin/pip install *)",
       "Read(//opt/homebrew/bin/**)",
       "Read(//usr/local/bin/**)",
-      "Bash(pyenv versions *)"
+      "Bash(pyenv versions *)",
+      "Bash(npx supabase *)",
+      "Read(//tmp/sb-migrate/.supabase/**)",
+      "Read(//private/tmp/sb-migrate/**)",
+      "Bash(xargs ls *)"
     ]
   },
   "enableAllProjectMcpServers": true,

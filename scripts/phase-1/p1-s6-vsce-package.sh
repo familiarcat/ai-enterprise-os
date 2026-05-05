@@ -25,13 +25,14 @@ STEP="p1-s6-vsce-package"
 step_header "PHASE 1 — VSCODE EXTENSION MVP" "Step 6: Build & Package .vsix"
 
 EXT_DIR="$ROOT/apps/vscode"
-WEBVIEW_DIR="$EXT_DIR/webview"
 
 cd "$EXT_DIR"
 
 # ── 1. Install Extension Dependencies ─────────────────────────────────────────
-echo "  📦 Chief O'Brien: Re-aligning extension buffers..."
-pnpm install
+echo "  📦 Chief O'Brien: Re-aligning monorepo dependencies for apps/vscode..."
+cd "$ROOT" # Move to root for monorepo pnpm install
+pnpm install --filter apps/vscode # Install dependencies specifically for this workspace
+cd "$EXT_DIR" # Move back to extension directory
 
 # ── 1b. Ensure Mandatory README exists (Required by vsce) ──────────────────────
 if [ ! -f "README.md" ]; then
@@ -41,15 +42,12 @@ if [ ! -f "README.md" ]; then
 fi
 
 # ── 2. Build Webview React Assets ─────────────────────────────────────────────
-if [ -d "$WEBVIEW_DIR" ]; then
-    echo "  ⚛️  Building Agent Viewport (React Webview)..."
-    cd "$WEBVIEW_DIR"
-    pnpm install
+if grep -q "\"build\":" "package.json"; then
+    echo "  ⚛️  Chief O'Brien: Energizing React Webview build..."
     pnpm run build
-    cd "$EXT_DIR"
-    echo "  ✔ Webview assets generated in apps/vscode/media/"
+    echo "  ✔ Webview assets generated in $EXT_DIR/media/"
 else
-    echo "  ⚠️  Webview directory missing. Skipping UI build."
+    echo "  ⚠️  No build script found in package.json. Skipping UI build."
 fi
 
 # ── 3. Compile Extension Source ───────────────────────────────────────────────
