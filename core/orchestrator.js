@@ -997,7 +997,8 @@ async function handleToolCall(name, args, { notify = () => {} } = {}) {
       return await gitmcpSearch(args.query);
 
     case 'discover_mcp_tools':
-      return await discoverMcpTools(args.query, args.persona);
+      notify(`[Discovery] Initiating multi-registry scan for: ${args.query}...`);
+      return await discoverMcpTools(args.query, args.persona || 'commander_data');
 
     case 'integrate_mcp_tool':
       return await integrateMcpTool(args.project, args.query, args.persona, args.deploymentConfig);
