@@ -9,7 +9,7 @@ const fs = require('fs');
 const os = require('os');
 
 // Import Memory Systems from the Shared Kernel to resolve circular dependencies
-const { getMemorySystems, resetMemorySystems } = require('./memory.js');
+const { getMemorySystems, resetMemorySystems, runMission } = require('./memory.js');
 const { incrementTokenUsage } = require('./repository.js');
 
 /**
@@ -116,6 +116,7 @@ const MODEL_CONFIG = {
   lt_uhura:        process.env.MODEL_ANALYST      || 'google/gemini-pro-1.5',
   tasha_yar:       process.env.MODEL_ANALYST      || 'google/gemini-flash-1.5',
 };
+exports.MODEL_CONFIG = MODEL_CONFIG;
 
 /**
  * Persona Registry for Tool Enrichment
@@ -160,7 +161,8 @@ const WORF_EXCLUSIONS = [
   'PLATFORM_CONSTITUTION.md',
   'apps/vscode/media/',
   'apps/vscode/out/',
-  'dist/'
+  'dist/',
+  'crew-memories/'
 ];
 
 /**
@@ -340,109 +342,6 @@ function invokeCrewAgent(options) {
 }
 
 /**
- * runMission: Core mission execution logic refactored for Composable Cognitive Infrastructure.
- * Utilizes the MCPContext interface for all agentic reasoning.
- * 
- * @param {Object} context - Standardized MCPContext envelope.
- * @returns {Promise<Object>} Mission results and generated plan.
- */
-async function runMission(context) {
-  // Normalize context from MCPContext interface
-  const { 
-    sessionId, 
-    persona = 'captain_picard', 
-    task,
-    memory = {},
-    constraints = [],
-    metadata = {}
-  } = context;
-  
-  console.log(`[Captain Picard] Session ${sessionId}: Engaging v11 execution loop for task: ${task.substring(0, 50)}...`);
-
-  // Strictly use normalized memory properties
-  const contextWindow = memory.longTerm?.join('\n\n') || await recallMemory(task);
-
-  try {
-    let executionResponse = '';
-    let reflectionResponse = '';
-    let attempts = 0;
-    const maxAttempts = 3;
-    let passed = false;
-    let currentTask = task;
-
-    while (attempts < maxAttempts && !passed) {
-      attempts++;
-      console.log(`[Orchestrator] Attempt ${attempts}/${maxAttempts} for Session ${sessionId}...`);
-
-      // 1. EXECUTION PHASE: Primary agent generates the result
-      executionResponse = await invokeCrewAgent({
-        objective: currentTask,
-        persona,
-        context: contextWindow,
-        model: metadata.modelTier || MODEL_CONFIG[persona],
-        constraints,
-        metadata
-      });
-
-      // 2. REFLECTION PHASE (v11 Architecture): Auditor critiques the output
-      console.log(`[Lt. Worf] Critically evaluating output for Session ${sessionId} (Attempt ${attempts})...`);
-      reflectionResponse = await invokeCrewAgent({
-        objective: `Critically evaluate the following output for the task: "${task}". Provide a quality score (1-10), identify technical weaknesses, and suggest specific improvements for the next iteration.`,
-        persona: 'lt_worf',
-        context: `Initial Output:\n${executionResponse}\n\nHistorical Constraints:\n${constraints.join(', ')}`,
-        model: MODEL_CONFIG.lt_worf,
-        metadata: { ...metadata, stage: 'reflection' }
-      });
-
-      // Parse score from Worf's reflection
-      const scoreMatch = reflectionResponse.match(/score:\s*(\d+)/i);
-      const score = scoreMatch ? parseInt(scoreMatch[1], 10) : 10;
-
-      if (score < 5 && attempts < maxAttempts) {
-        console.warn(`[Lt. Worf] Score ${score} is unacceptable. Initiating self-correction loop...`);
-        // Enrich the next task with the critique for iterative improvement
-        currentTask = `The previous attempt failed evaluation with a score of ${score}/10. 
-Feedback from Lt. Worf to address:
-${reflectionResponse}
-
-Re-implement the following task: "${task}"`;
-      } else {
-        passed = true;
-      }
-    }
-
-    const finalPackage = {
-      output: executionResponse,
-      reflection: reflectionResponse,
-      v11_compliant: true,
-      attempts
-    };
-
-    // 3. STORAGE PHASE: Persist both execution and reflection for semantic memory
-    await storeMissionResult(JSON.stringify(finalPackage), { 
-      ...metadata, 
-      sessionId, 
-      persona, 
-      task,
-      timestamp: new Date().toISOString()
-    });
-
-    return {
-      status: 'SUCCESS',
-      content: [
-        { type: 'text', text: executionResponse },
-        { type: 'text', text: `\n\n--- [V11 REFLECTION: LT. WORF] ---\n${reflectionResponse}` }
-      ],
-      plan: task,
-      reflection: reflectionResponse
-    };
-  } catch (err) {
-    console.error(`[Orchestrator] Mission failure: ${err.message}`);
-    throw err;
-  }
-}
-
-/**
  * Executes Git operations to fulfill mission persistence.
  */
 async function gitOperation(project, action, message) {
@@ -580,6 +479,47 @@ async function gitmcpSearch(query, persona = 'commander_data') {
 }
 
 /**
+ * Discover MCP Tools: Actively searches multiple registries (GitMCP, GitHub, Anthropic)
+ * for tools matching the agent's persona and current task requirements.
+ */
+async function discoverMcpTools(query, persona = 'captain_picard') {
+  console.log(`[Discovery] ${persona} is initiating a deep search for MCP libraries matching: "${query}"`);
+  
+  const registries = [
+    { name: 'GitMCP', url: `https://gitmcp.io/api/v1/search?q=${encodeURIComponent(query)}` },
+    { name: 'GitHub', url: `https://api.github.com/search/repositories?q=mcp-server+${encodeURIComponent(query)}` }
+  ];
+
+  const results = [];
+
+  for (const registry of registries) {
+    try {
+      const response = await fetch(registry.url, { signal: AbortSignal.timeout(5000) });
+      if (response.ok) {
+        const data = await response.json();
+        results.push({ registry: registry.name, data });
+      }
+    } catch (err) {
+      console.warn(`[Discovery] Failed to search ${registry.name}: ${err.message}`);
+    }
+  }
+
+  // Enrichment: Use the LLM to select the best tool from results based on the persona
+  const selectionMission = await invokeCrewAgent({
+    objective: `Analyze these search results for "${query}" and select the most pragmatic MCP library for a "${persona}" persona.`,
+    persona: 'commander_data',
+    context: JSON.stringify(results),
+    model: MODEL_CONFIG.commander_data
+  });
+
+  return {
+    query,
+    recommendation: selectionMission,
+    registries_searched: registries.map(r => r.name)
+  };
+}
+
+/**
  * integrateMcpTool: Pinnacle function to search, audit, register, and visually integrate a new tool.
  * Handles the full lifecycle from GitMCP discovery to UI scaffolding.
  */
@@ -668,6 +608,11 @@ function worfSecurityScan(files, projectPath) {
 
   files.forEach(file => {
     const fullPath = path.resolve(resolvedProjectPath, file);
+
+    // Tactical Ignore: Sourcemaps and build metadata often contain false positives
+    if (fullPath.endsWith('.map') || fullPath.endsWith('.js.map') || fullPath.endsWith('.css.map')) {
+      return;
+    }
 
     // Worf Exclusion Logic: Skip honorable documentation and archival scripts
     const relativePath = path.relative(resolvedProjectPath, fullPath);
@@ -1074,76 +1019,149 @@ async function handleToolCall(name, args, { notify = () => {} } = {}) {
 
 /**
  * runMissions: Executes multiple missions concurrently.
- * Placeholder for Phase 2 migration.
  */
 async function runMissions(missions, limit = 5, progressCallback = () => {}) {
-  console.warn(`[Orchestrator] runMissions called (placeholder). Missions: ${missions.length}, Limit: ${limit}`);
-  // Simulate execution for each mission
+  console.log(`[Geordi] Initiating batch execution for ${missions.length} missions. Concurrency limit: ${limit}`);
   const results = [];
-  for (let i = 0; i < missions.length; i++) {
-    const mission = missions[i];
-    progressCallback({ index: i, total: missions.length, objective: mission.objective });
-    // In a real implementation, this would call runMission for each
-    results.push({
-      mission: mission.objective,
-      status: 'SIMULATED_SUCCESS',
-      output: `Simulated result for mission: ${mission.objective}`
-    });
-    await new Promise(resolve => setTimeout(resolve, 100)); // Simulate work
+  
+  // Simple concurrency-limited pool
+  const executeMission = async (mission, index) => {
+    progressCallback({ index, total: missions.length, objective: mission.objective });
+    try {
+      const res = await runMission({
+        sessionId: `batch-${Date.now()}-${index}`,
+        task: mission.objective,
+        metadata: { project: mission.project, batch: true }
+      });
+      return { mission: mission.objective, status: 'SUCCESS', output: res };
+    } catch (err) {
+      return { mission: mission.objective, status: 'ERROR', error: err.message };
+    }
+  };
+
+  // Process in chunks based on limit
+  for (let i = 0; i < missions.length; i += limit) {
+    const chunk = missions.slice(i, i + limit);
+    const chunkResults = await Promise.all(chunk.map((m, idx) => executeMission(m, i + idx)));
+    results.push(...chunkResults);
   }
-  return { status: 'SIMULATED_BATCH_COMPLETE', results };
+
+  return { status: 'BATCH_COMPLETE', results };
 }
 
 /**
  * getVersionsHierarchy: Extracts a structured JSON hierarchy of project versions.
- * Placeholder for Phase 2 migration.
  */
 async function getVersionsHierarchy() {
-  console.warn('[Orchestrator] getVersionsHierarchy called (placeholder).');
-  return {
-    status: 'SIMULATED_SUCCESS',
-    hierarchy: {
-      'v1.0': { date: '2026-01-01', description: 'Initial deployment' },
-      'v1.1': { date: '2026-02-15', description: 'MCP Bridge integration' },
-      'v1.2': { date: '2026-04-01', description: 'v11 Architecture update' }
+  const versionsPath = path.resolve(__dirname, '../versions');
+  console.log(`[Data] Scanning versions directory: ${versionsPath}`);
+  
+  if (!fs.existsSync(versionsPath)) {
+    return { status: 'ERROR', message: 'Versions directory not found' };
+  }
+
+  const files = fs.readdirSync(versionsPath);
+  const hierarchy = {};
+
+  files.forEach(file => {
+    if (file.endsWith('.md') || file.endsWith('.json')) {
+      const stats = fs.statSync(path.join(versionsPath, file));
+      const versionKey = file.split('-')[0] || file;
+      hierarchy[versionKey] = {
+        filename: file,
+        date: stats.mtime.toISOString(),
+        size: stats.size
+      };
     }
+  });
+
+  return {
+    status: 'SUCCESS',
+    hierarchy
   };
 }
 
 /**
  * manageProject: Initializes or updates project-level metadata.
- * Placeholder for Phase 2 migration.
  */
 async function manageProject(project, action, details) {
-  console.warn(`[Orchestrator] manageProject called (placeholder). Project: ${project}, Action: ${action}`);
+  const { supabase } = getMemorySystems();
+  console.log(`[O'Brien] Managing project: ${project} (${action})`);
+  
+  const { data, error } = await supabase
+    .from('projects')
+    .upsert({ id: project, ...details, updated_at: new Date().toISOString() })
+    .select()
+    .single();
+
+  if (error) throw new Error(`Project management failed: ${error.message}`);
+  
   return {
-    status: 'SIMULATED_SUCCESS',
-    message: `Project '${project}' managed with action '${action}'. Details: ${JSON.stringify(details)}`
+    status: 'SUCCESS',
+    data
   };
 }
 
 /**
  * manageSprint: Manages Agile sprints within a project.
- * Placeholder for Phase 2 migration.
  */
 async function manageSprint(project, action, sprint_name, details) {
-  console.warn(`[Orchestrator] manageSprint called (placeholder). Project: ${project}, Sprint: ${sprint_name}, Action: ${action}`);
+  const { supabase } = getMemorySystems();
+  console.log(`[O'Brien] Managing sprint: ${sprint_name} for project: ${project}`);
+
+  const { data, error } = await supabase
+    .from('sprints')
+    .upsert({ project_id: project, name: sprint_name, ...details })
+    .select()
+    .single();
+
+  if (error) throw new Error(`Sprint management failed: ${error.message}`);
+
   return {
-    status: 'SIMULATED_SUCCESS',
-    message: `Sprint '${sprint_name}' for project '${project}' managed with action '${action}'. Details: ${JSON.stringify(details)}`
+    status: 'SUCCESS',
+    data
   };
 }
 
 /**
  * manageTask: Creates, moves, or assigns tasks within a project or sprint.
- * Placeholder for Phase 2 migration.
  */
 async function manageTask(project, action, task_id, details) {
-  console.warn(`[Orchestrator] manageTask called (placeholder). Project: ${project}, Task: ${task_id}, Action: ${action}`);
+  const { supabase } = getMemorySystems();
+  console.log(`[O'Brien] Managing task: ${task_id} for project: ${project}`);
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .upsert({ id: task_id, project_id: project, ...details })
+    .select()
+    .single();
+
+  if (error) throw new Error(`Task management failed: ${error.message}`);
+
   return {
-    status: 'SIMULATED_SUCCESS',
-    message: `Task '${task_id}' for project '${project}' managed with action '${action}'. Details: ${JSON.stringify(details)}`
+    status: 'SUCCESS',
+    data
   };
+}
+
+/**
+ * CLI Entry Point
+ * Allows running orchestrator functions directly from the terminal (e.g. via pnpm scripts).
+ */
+if (require.main === module) {
+  const args = process.argv.slice(2);
+  const command = args[0];
+  
+  if (command === 'health_check') {
+    const isFix = args.includes('--fix');
+    handleToolCall('health_check', { fix: isFix }).then(res => {
+      console.log(JSON.stringify(res, null, 2));
+      process.exit(res.status === 'healthy' ? 0 : 1);
+    }).catch(err => {
+      console.error(`[Orchestrator] CLI Error: ${err.message}`);
+      process.exit(1);
+    });
+  }
 }
 
 module.exports = { 
@@ -1153,5 +1171,6 @@ module.exports = {
   recallMemory, storeMissionResult, generateEmbedding,
   runMissions, getVersionsHierarchy, manageProject, manageSprint, manageTask,
   listSkills, getSkill,
-  handleToolCall, CREW_PERSONAS // Export centralized handler
+  handleToolCall, CREW_PERSONAS,
+  discoverMcpTools // Export discovery engine
 };

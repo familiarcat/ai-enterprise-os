@@ -4,7 +4,8 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
-    "clean": "turbo run clean && rm -rf node_modules"
+    "clean": "turbo run clean && rm -rf node_modules",
+    "health:fix": "node core/orchestrator.js health_check --fix"
   },
   "devDependencies": {
     "turbo": "^1.12.0"
