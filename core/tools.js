@@ -176,6 +176,11 @@ const TOOL_DEFINITIONS = [
     name: "deploy_production",
     description: "Trigger production deployment for a specific domain (e.g., civic)",
     inputSchema: { type: "object", properties: { domain: { type: "string" }, rationale: { type: "string" } }, required: ["domain", "rationale"] }
+  },
+  {
+    name: "crew_roll_call",
+    description: "Validate crew presence and memory system access in the Observation Lounge",
+    inputSchema: { type: "object", properties: {} }
   }
 ];
 

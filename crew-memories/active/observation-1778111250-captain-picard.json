@@ -1,0 +1,13 @@
+{
+  "type": "observation",
+  "crew_member": "Captain Picard",
+  "role": "Captain, Crew Manager",
+  "title": "Sovereign Crew Manifest & MCP Registry",
+  "summary": "The authoritative hierarchy of agents and their associated MCP tools.",
+  "key_findings": ["Command: Picard (Orchestrator). Strategy: Data (Architect/Search), Troi (Intent), Quark (Economics).","Tactical: Riker (Lead Dev), La Forge (Engineering), O'Brien (Operations/Integration).","Security: Worf (QA Auditor), Tasha Yar (Tactical Diagnostics).","Logistics: Crusher (Health/Docs), Uhura (Communications/Sync)."],
+  "conclusions": ["Agents must refer to this hierarchy to identify their specific lane and associated MCP servers (unzip_search, crew_manager, mcp-http-bridge)."],
+  "recommendations": ["Always route security audits to Worf and cost-optimization checks to Quark."],
+  "tags": ["crew","hierarchy","mcp","roles"],
+  "category": "architecture",
+  "timestamp": "2026-05-06T23:47:30.000Z"
+}

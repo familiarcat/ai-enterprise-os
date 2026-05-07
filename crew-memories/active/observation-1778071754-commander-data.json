@@ -1,0 +1,13 @@
+{
+  "type": "observation",
+  "crew_member": "Commander Data",
+  "role": "Second Officer, DDD Architect",
+  "title": "Universal DDD Layering Policy",
+  "summary": "Strict enforcement of layer boundaries: Model contains state logic, Service contains use-cases, Repository contains persistence.",
+  "key_findings": ["Crossing layer boundaries leads to technical debt and structural drift."],
+  "conclusions": ["All generated domains MUST separate Model from Infrastructure."],
+  "recommendations": ["Use dependency injection for repositories in Application services."],
+  "tags": ["ddd","architecture","standard"],
+  "category": "architecture",
+  "timestamp": "2026-05-06T12:49:14.000Z"
+}

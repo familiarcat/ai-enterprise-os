@@ -3,11 +3,17 @@
  * Purpose: Populates Supabase with 3 sample missions for the Agile Dashboard.
  */ 
 require('dotenv').config();
-const { storeMissionResult, getMemorySystems } = require('../core/orchestrator');
-require('dotenv').config();
+const orchestrator = require('../core/orchestrator');
 
 async function seed() {
   console.log("🖖 Data: Initiating mission seeding sequence...");
+
+  // Access functions directly from the export object to mitigate circular dependency issues
+  const { storeMissionResult } = orchestrator;
+  
+  if (!storeMissionResult) {
+    throw new Error("Critical: orchestrator.storeMissionResult is undefined. Check for circular dependencies in core/.");
+  }
 
   const samples = [
     {

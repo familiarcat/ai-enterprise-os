@@ -711,6 +711,33 @@ function worfSecurityAudit(mcp) {
 }
 
 /**
+ * Conducts an Observation Lounge roll call.
+ * Each crew member affirms access to memory systems.
+ * Extended: Reports on current autonomy levels.
+ */
+async function conductRollCall() {
+  const integrity = await verifyIntegrity();
+  const isHealthy = integrity.redis === 'healthy' && integrity.supabase === 'healthy';
+
+  const crewAffirmations = Object.keys(ROLES).map(key => {
+    const name = key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    if (isHealthy) {
+      return `[${name}]: Affirmative. I have established a secure link to the Redis synaptic cache and Supabase vector memory. Access is nominal.`;
+    } else {
+      return `[${name}]: Warning. I sense a disturbance in the memory pathways. Integrity check failed.`;
+    }
+  });
+
+  return {
+    status: isHealthy ? 'NOMINAL' : 'DEGRADED',
+    message: "Observation Lounge Roll Call Complete.",
+    integrity,
+    affirmations: crewAffirmations,
+    autonomy_mode: "ENABLED - Minimal human intervention required."
+  };
+}
+
+/**
  * Lists all available .skill files in the orchestrator core.
  */
 function listSkills() {
@@ -910,6 +937,29 @@ async function generateROIReport(project = null) {
 }
 
 /**
+ * Determines if human interaction is required based on agent confidence and risk.
+ * Part of the "hands-free" discernment logic.
+ */
+function discernHumanNeed(agentResponse, score) {
+  const triggers = [
+    "DELETION_REQUIRED",
+    "CREDENTIALS_MISSING",
+    "AMBIGUOUS_OBJECTIVE",
+    "COST_OVERRUN"
+  ];
+
+  if (score < 3) return { required: true, reason: "Critical quality failure below threshold." };
+  
+  for (const trigger of triggers) {
+    if (agentResponse.includes(trigger)) {
+      return { required: true, reason: `Agent flagged high-risk trigger: ${trigger}` };
+    }
+  }
+
+  return { required: false };
+}
+
+/**
  * Unified Tool Dispatcher
  * This is the "Single Point of Execution" for all MCP tools.
  * Both stdio and HTTP servers call this to ensure identical behavior.
@@ -1005,6 +1055,9 @@ async function handleToolCall(name, args, { notify = () => {} } = {}) {
 
     case 'generate_roi_report':
       return await generateROIReport(args.project);
+
+    case 'crew_roll_call':
+      return await conductRollCall();
 
     case 'deploy_production':
       return { status: "INITIATED", message: `Release for ${args.domain} dispatched.` };
@@ -1172,6 +1225,6 @@ module.exports = {
   recallMemory, storeMissionResult, generateEmbedding,
   runMissions, getVersionsHierarchy, manageProject, manageSprint, manageTask,
   listSkills, getSkill,
-  handleToolCall, CREW_PERSONAS,
+  handleToolCall, CREW_PERSONAS, conductRollCall, discernHumanNeed,
   discoverMcpTools // Export discovery engine
 };

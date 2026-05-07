@@ -1,0 +1,13 @@
+{
+  "type": "observation",
+  "crew_member": "commander_riker",
+  "role": "First Officer, Lead Dev",
+  "title": "UI Audit: Missing Screen Manifest",
+  "summary": "Reviewing the BridgeSidebar navigation links against the current directory structure.",
+  "key_findings": ["Several links in the Sidebar point to routes that haven't been scaffolded in the Phase 2 merge."],
+  "conclusions": ["We need to execute a 'run_factory_mission' to scaffold missing pages for Mission Control and Engineering."],
+  "recommendations": ["Check 'apps/dashboard/next.config.js' for basepath or rewrite rules causing the 404."],
+  "tags": ["ui","navigation","riker"],
+  "category": "strategy",
+  "timestamp": "2026-05-07T04:02:59.000Z"
+}

@@ -117,6 +117,21 @@ export class AgentViewportPanel {
 
                             executeAgentTask(this._mcpClient, persona, task, metadata)
                                 .then((result: any) => {
+                                    // Handle Human-in-the-Loop intervention requests
+                                    if (result.status === 'HITL_REQUIRED') {
+                                        vscode.window.showWarningMessage(
+                                            `⚠️ Sovereign Factory: ${result.message}`,
+                                            "Open Observation Lounge"
+                                        ).then(selection => {
+                                            if (selection === "Open Observation Lounge") {
+                                                this._panel.reveal();
+                                                this._panel.webview.postMessage({ 
+                                                    command: 'focusTab', 
+                                                    tab: 'lounge' 
+                                                });
+                                            }
+                                        });
+                                    }
                                     this._panel.webview.postMessage({ command: 'mcpResult', result, toolName, silent });
                                 })
                                 .catch((error: any) => {

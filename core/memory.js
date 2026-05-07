@@ -7,7 +7,7 @@
 const EventEmitter = require('events');
 const Redis = require('ioredis');
 const { createClient } = require('@supabase/supabase-js');
-const { recallMemory, invokeCrewAgent, MODEL_CONFIG, storeMissionResult } = require('./orchestrator');
+const { recallMemory, invokeCrewAgent, MODEL_CONFIG, storeMissionResult, discernHumanNeed, discoverMcpTools } = require('./orchestrator');
 
 let _redis = null;
 let _supabase = null;
@@ -50,7 +50,7 @@ function getMemorySystems() {
   return { redis: _redis, supabase: _supabase };
 }
 
-module.exports = { getMemorySystems, resetMemorySystems, eventBus: _eventBus };
+module.exports = { getMemorySystems, resetMemorySystems, eventBus: _eventBus, runMission };
 /**
  * runMission: Core mission execution logic refactored for Composable Cognitive Infrastructure.
  * Utilizes the MCPContext interface for all agentic reasoning.
@@ -67,8 +67,13 @@ async function runMission(context) {
 
   console.log(`[Captain Picard] Session ${sessionId}: Engaging v11 execution loop for task: ${task.substring(0, 50)}...`);
 
+  // 0. DISCOVERY PHASE (Autonomous Agency): Agent selects specialized tools based on task context
+  console.log(`[Orchestrator] ${persona} is instantiating autonomous agency and selecting specialized tools...`);
+  const discovery = await discoverMcpTools(task, persona);
+  const toolInsights = `\n[Agent Discovery Log]: Verified tools selected for this persona: ${discovery.registries_searched.join(', ')}.\nRecommendation: ${discovery.recommendation}\n`;
+
   // Strictly use normalized memory properties
-  const contextWindow = memory.longTerm?.join('\n\n') || await recallMemory(task);
+  const contextWindow = (memory.longTerm?.join('\n\n') || await recallMemory(task)) + toolInsights;
 
   try {
     let executionResponse = '';
@@ -92,6 +97,16 @@ async function runMission(context) {
         metadata
       });
 
+      // 1.5 INTENT VALIDATION (Counselor Troi): Validating strategic empathy and intent alignment
+      console.log(`[Counselor Troi] Sensing intent alignment for Session ${sessionId}...`);
+      const intentValidation = await invokeCrewAgent({
+        objective: `Analyze if this response captures the 'intent' and 'empathy' of the original task: "${task}". Response:\n${executionResponse}`,
+        persona: 'counselor_troi',
+        context: contextWindow,
+        model: MODEL_CONFIG.counselor_troi,
+        metadata: { ...metadata, stage: 'intent_validation' }
+      });
+
       // 2. REFLECTION PHASE (v11 Architecture): Auditor critiques the output
       console.log(`[Lt. Worf] Critically evaluating output for Session ${sessionId} (Attempt ${attempts})...`);
       reflectionResponse = await invokeCrewAgent({
@@ -105,6 +120,17 @@ async function runMission(context) {
       // Parse score from Worf's reflection
       const scoreMatch = reflectionResponse.match(/score:\s*(\d+)/i);
       const score = scoreMatch ? parseInt(scoreMatch[1], 10) : 10;
+
+      // 2.1 DISCERNMENT PHASE (v11 "Hands-free" capability): Check for human intervention triggers
+      const humanNeed = discernHumanNeed(reflectionResponse, score);
+      if (humanNeed.required) {
+        console.warn(`[Orchestrator] MISSION SUSPENDED: ${humanNeed.reason}`);
+        return {
+          status: 'HITL_REQUIRED',
+          message: humanNeed.reason,
+          content: [{ type: 'text', text: executionResponse }, { type: 'text', text: `\n\n[WORF CRITIQUE]: ${reflectionResponse}` }]
+        };
+      }
 
       if (score < 5 && attempts < maxAttempts) {
         console.warn(`[Lt. Worf] Score ${score} is unacceptable. Initiating self-correction loop...`);
@@ -138,8 +164,9 @@ Re-implement the following task: "${task}"`;
     return {
       status: 'SUCCESS',
       content: [
-        { type: 'text', text: executionResponse },
-        { type: 'text', text: `\n\n--- [V11 REFLECTION: LT. WORF] ---\n${reflectionResponse}` }
+        { type: 'text', text: `[Observation Lounge Session Consolidated Output]\n\n${executionResponse}` },
+        { type: 'text', text: `\n\n--- [V11 REFLECTION: LT. WORF] ---\n${reflectionResponse}` },
+        { type: 'text', text: `\n\n--- [INTENT ANALYSIS: COUNSELOR TROI] ---\n${intentValidation}` }
       ],
       plan: task,
       reflection: reflectionResponse

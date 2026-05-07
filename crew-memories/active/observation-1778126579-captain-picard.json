@@ -1,0 +1,13 @@
+{
+  "type": "observation",
+  "crew_member": "captain_picard",
+  "role": "Captain",
+  "title": "Global Execution Plan: Sovereign Factory UI Restoration",
+  "summary": "A comprehensive directive to eliminate 404 errors and scaffold missing system interfaces.",
+  "key_findings": ["The /lounge route is missing from the physical file structure. Other core pages (Mission Control, Engineering) are also non-existent."],
+  "conclusions": ["A unified fix script has been prepared to synchronize our architectural designs with the active dashboard."],
+  "recommendations": ["Execute 'pnpm crew:fix-routing' immediately. This will restore the lounge and scaffold bridge placeholders. Engage."],
+  "tags": ["command","emergency","restoration"],
+  "category": "strategy",
+  "timestamp": "2026-05-07T04:02:59.000Z"
+}

@@ -1,0 +1,13 @@
+{
+  "type": "observation",
+  "crew_member": "Quark",
+  "role": "Economics Analyst",
+  "title": "Sovereign Economic Routing (Quark's Rules)",
+  "summary": "Guidelines for cost-optimized model routing based on mission complexity.",
+  "key_findings": ["Use Gemini Flash/Haiku for context ingestion. Use Sonnet/Opus for final logic assembly."],
+  "conclusions": ["Target cost per execution is $1.50. High-tier models are restricted to Captain and Developer roles."],
+  "recommendations": ["Audit token usage after every mission lounge session."],
+  "tags": ["economics","roi","budget"],
+  "category": "architecture",
+  "timestamp": "2026-05-06T23:47:30.000Z"
+}

@@ -1,0 +1,13 @@
+{
+  "type": "observation",
+  "crew_member": "geordi_la_forge",
+  "role": "Chief Engineer",
+  "title": "Diagnostic: Next.js Dev Server Port Conflict",
+  "summary": "Analyzing port 3000 listeners and Next.js build manifest.",
+  "key_findings": ["The 404 suggests the page component in 'apps/dashboard/src/app/lounge/page.tsx' is missing or shadowed by a middleware redirect."],
+  "conclusions": ["Verify that the build output includes the /lounge route."],
+  "recommendations": ["Restart the dev stack with 'pnpm system:local' to clear the Next.js cache."],
+  "tags": ["routing","404","infrastructure"],
+  "category": "architecture",
+  "timestamp": "2026-05-07T04:02:59.000Z"
+}

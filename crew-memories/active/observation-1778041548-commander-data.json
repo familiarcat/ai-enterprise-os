@@ -1,0 +1,13 @@
+{
+  "type": "observation",
+  "crew_member": "Commander Data",
+  "role": "Second Officer, Architect",
+  "title": "Global MCP Service Discovery via GitMCP",
+  "summary": "Established https://gitmcp.io/ as the primary external registry for crew agents to discover and validate new MCP servers.",
+  "key_findings": ["Manual tool creation is inefficient compared to GitMCP-sourced services."],
+  "conclusions": ["Agents SHOULD search GitMCP for existing tools before requesting custom implementations."],
+  "recommendations": ["Update Uhura's sync registry tool to poll gitmcp.io endpoints."],
+  "tags": ["mcp","discovery","registry","gitmcp"],
+  "category": "architecture",
+  "timestamp": "2026-05-06T04:25:48.000Z"
+}

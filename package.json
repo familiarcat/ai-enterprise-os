@@ -5,7 +5,10 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "clean": "turbo run clean && rm -rf node_modules",
-    "health:fix": "node core/orchestrator.js health_check --fix"
+    "health:fix": "node core/orchestrator.js health_check --fix",
+    "system:local": "bash scripts/run-dev-stack.sh",
+    "crew:discuss-routing": "bash scripts/strategy/route-emergency.sh",
+    "crew:fix-routing": "bash scripts/strategy/fix-lounge-route.sh"
   },
   "devDependencies": {
     "turbo": "^1.12.0"
