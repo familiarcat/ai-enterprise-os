@@ -11,6 +11,7 @@ const os = require('os');
 // Infrastructure imports - Moved to top to resolve circular initialization 
 // issues and Temporal Dead Zone (TDZ) errors in test environments.
 const { getMemorySystems, resetMemorySystems, runMission } = require('./memory.js');
+const { MODEL_CONFIG, CREW_PERSONAS, normalisePersonaKey } = require('./crew-manifest.js');
 const { incrementTokenUsage } = require('./repository.js');
 
 /**
@@ -138,57 +139,6 @@ const ROLES = {
   lt_uhura: "You are Lt. Nyota Uhura, Communications Officer. You ensure all frequencies are open. You integrate MCP communication tools from GitMCP for real-time status updates and cross-system sync.",
   tasha_yar: "You are Tasha Yar, Chief of Security and Tactical Officer. Your goal is tactical verification and system readiness. You execute final combat diagnostics and smoke tests to ensure all systems are nominal and ready for engagement.",
 };
-
-/**
- * Universal Model Registry: Maps technical capabilities to optimized model endpoints.
- * This allows any LLM Agent to understand the resource cost vs quality trade-offs.
- */
-const MODEL_CONFIG = {
-  TIER_ANALYSIS:   process.env.MODEL_ANALYST      || 'google/gemini-flash-1.5',      // High context, low cost
-  TIER_STRATEGIC:  process.env.MODEL_ARCHITECT    || 'anthropic/claude-3-haiku',     // Fast reasoning
-  TIER_PRODUCTION: process.env.MODEL_DEVELOPER    || 'anthropic/claude-3-5-sonnet',  // Maximum coding accuracy
-  TIER_CRITIQUE:   process.env.MODEL_QA_AUDITOR   || 'openai/gpt-4o-mini',           // High detail, low cost
-  TIER_EMBEDDING:  process.env.MODEL_EMBEDDING    || 'openai/text-embedding-3-small',
-
-  // Handle-based mapping
-  captain_picard:  process.env.MODEL_CAPTAIN      || 'anthropic/claude-3-opus',
-  commander_riker: process.env.MODEL_DEVELOPER    || 'anthropic/claude-3-5-sonnet',
-  commander_data:  process.env.MODEL_ARCHITECT    || 'anthropic/claude-3-5-sonnet',
-  geordi_la_forge: process.env.MODEL_DEVELOPER    || 'anthropic/claude-3-5-sonnet',
-  lt_worf:         process.env.MODEL_QA_AUDITOR   || 'openai/gpt-4o-mini',
-  dr_crusher:      process.env.MODEL_ANALYST      || 'anthropic/claude-3-5-sonnet',
-  counselor_troi:  process.env.MODEL_ANALYST      || 'anthropic/claude-3-haiku',
-  quark:           process.env.MODEL_QA_AUDITOR   || 'openai/gpt-4o-mini',
-  chief_obrien:    process.env.MODEL_QA_AUDITOR   || 'openai/gpt-4o-mini',
-  lt_uhura:        process.env.MODEL_ANALYST      || 'google/gemini-pro-1.5',
-  tasha_yar:       process.env.MODEL_ANALYST      || 'google/gemini-flash-1.5',
-};
-exports.MODEL_CONFIG = MODEL_CONFIG;
-
-/**
- * Persona Registry for Tool Enrichment
- * Unified source for roles and goals used by CrewAI and Mission logic.
- */
-const CREW_PERSONAS = {
-  captain_picard:    { role: 'Sovereign Crew Manager',     goal: 'Provide strategic direction and coordinate the crew toward mission success', model: MODEL_CONFIG.captain_picard },
-  commander_data:    { role: 'DDD Architect',               goal: 'Validate structural decisions and enforce architectural constraints',        model: MODEL_CONFIG.commander_data },
-  commander_riker:   { role: 'Senior Full-Stack Developer', goal: 'Implement mission-critical features with production quality',                model: MODEL_CONFIG.commander_riker },
-  geordi_la_forge:   { role: 'Senior Full-Stack Developer', goal: 'Engineer robust systems and solve complex technical problems',               model: MODEL_CONFIG.geordi_la_forge },
-  chief_obrien:      { role: 'Senior Full-Stack Developer', goal: 'Integrate components and ensure reliable implementation',                    model: MODEL_CONFIG.chief_obrien },
-  lt_worf:           { role: 'Senior QA Auditor',           goal: 'Aggressively challenge every assumption and find failure modes',             model: MODEL_CONFIG.lt_worf },
-  counselor_troi:    { role: 'Expert System Analyst',       goal: 'Interpret user intent and surface UX signal from data patterns',            model: MODEL_CONFIG.counselor_troi },
-  dr_crusher:        { role: 'Expert System Analyst',       goal: 'Diagnose system health and prescribe corrective actions',                   model: MODEL_CONFIG.dr_crusher },
-  lt_uhura:          { role: 'Expert System Analyst',       goal: 'Analyze communication patterns and cross-system integration signals',        model: MODEL_CONFIG.lt_uhura },
-  quark:             { role: 'Expert System Analyst',       goal: 'Maximize ROI, minimize cost, exploit arbitrage opportunities in model routing', model: MODEL_CONFIG.quark },
-};
-
-function normalisePersonaKey(name) {
-  if (!name) return 'captain_picard';
-  return name.toLowerCase()
-    .replace(/^(captain|commander|lieutenant|lt\.|lt|counselor|dr\.|dr|chief)\s+/, '')
-    .replace(/[\s\-]+/g, '_')
-    .replace(/[^a-z0-9_]/g, '');
-}
 
 /**
  * Worf Exclusion List: Paths that are exempt from security credential scanning.
@@ -1108,8 +1058,45 @@ async function handleToolCall(name, args, { notify = () => {} } = {}) {
     case 'crew_roll_call':
       return await conductRollCall();
 
-    case 'deploy_production':
-      return { status: "INITIATED", message: `Release for ${args.domain} dispatched.` };
+    case 'deploy_production': {
+      const { domain, rationale } = args;
+      const owner = process.env.GITHUB_OWNER;
+      const repo = process.env.GITHUB_REPO;
+      const token = process.env.GITHUB_TOKEN;
+      const workflowId = 'main.yml';
+
+      if (!owner || !repo || !token) {
+        throw new Error("GitHub deployment credentials (GITHUB_OWNER, GITHUB_REPO, GITHUB_TOKEN) are not configured.");
+      }
+
+      notify(`[Picard] Authorizing production deployment for ${domain}...`);
+      
+      try {
+        const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowId}/dispatches`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28'
+          },
+          body: JSON.stringify({
+            ref: 'main',
+            inputs: {
+              target_app: domain === 'civic' ? 'civic' : 'dashboard'
+            }
+          })
+        });
+
+        if (!response.ok) {
+          const errorMsg = await response.text();
+          throw new Error(`Workflow dispatch failed: ${response.status} - ${errorMsg}`);
+        }
+
+        return { status: "DISPATCHED", message: `Production deployment for ${domain} triggered via GHA. Rationale: ${rationale}` };
+      } catch (err) {
+        throw new Error(`Deployment failed: ${err.message}`);
+      }
+    }
 
     case 'health_check':
       const integrity = await verifyIntegrity(args.fix);
@@ -1127,27 +1114,19 @@ async function runMissions(missions, limit = 5, progressCallback = () => {}) {
   console.log(`[Geordi] Initiating batch execution for ${missions.length} missions. Concurrency limit: ${limit}`);
   const results = [];
   
-  // Simple concurrency-limited pool
-  const executeMission = async (mission, index) => {
+  const pLimit = (await import('p-limit')).default(limit);
+  const tasks = missions.map((mission, index) => pLimit(async () => {
     progressCallback({ index, total: missions.length, objective: mission.objective });
-    try {
-      const res = await runMission({
-        sessionId: `batch-${Date.now()}-${index}`,
-        task: mission.objective,
-        metadata: { project: mission.project, batch: true }
-      });
-      return { mission: mission.objective, status: 'SUCCESS', output: res };
-    } catch (err) {
-      return { mission: mission.objective, status: 'ERROR', error: err.message };
-    }
-  };
+    const res = await runMission({
+      sessionId: `batch-${Date.now()}-${index}`,
+      task: mission.objective,
+      metadata: { project: mission.project, batch: true }
+    });
+    return { mission: mission.objective, status: 'SUCCESS', output: res };
+  }));
 
-  // Process in chunks based on limit
-  for (let i = 0; i < missions.length; i += limit) {
-    const chunk = missions.slice(i, i + limit);
-    const chunkResults = await Promise.all(chunk.map((m, idx) => executeMission(m, i + idx)));
-    results.push(...chunkResults);
-  }
+  const chunkResults = await Promise.allSettled(tasks);
+  results.push(...chunkResults.map((r, i) => r.status === 'fulfilled' ? r.value : { mission: missions[i].objective, status: 'ERROR', error: r.reason.message }));
 
   return { status: 'BATCH_COMPLETE', results };
 }

@@ -123,7 +123,7 @@ async function runMission(context) {
 
       // Parse score from Worf's reflection
       const scoreMatch = reflectionResponse.match(/score:\s*(\d+)/i);
-      const score = scoreMatch ? parseInt(scoreMatch[1], 10) : 10;
+      const score = scoreMatch ? parseInt(scoreMatch[1], 10) : 0;
 
       // 2.1 DISCERNMENT PHASE (v11 "Hands-free" capability): Check for human intervention triggers
       const humanNeed = discernHumanNeed(reflectionResponse, score);
