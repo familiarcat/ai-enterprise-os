@@ -40,9 +40,10 @@ export default function ObservationLounge() {
       <div className="space-y-4">
         {observations.length === 0 && <p className="animate-pulse">Waiting for crew frequencies...</p>}
         {observations.map((obs) => (
-          <div key={obs.id} className="border border-green-900 p-4 rounded bg-gray-900 shadow-lg">
+          <div key={obs.id} className="border border-green-900 p-4 rounded bg-gray-900 shadow-lg transition-all hover:border-green-400">
             <div className="flex justify-between text-[10px] text-green-600 mb-2 uppercase tracking-widest">
-              <span>{obs.crew_member} | {obs.role}</span>
+              <span className="font-bold">{obs.crew_member}</span>
+              <span className="opacity-70">{obs.role}</span>
               <span>{new Date(obs.timestamp).toLocaleTimeString()}</span>
             </div>
             <h2 className="text-lg font-semibold text-white">{obs.title}</h2>

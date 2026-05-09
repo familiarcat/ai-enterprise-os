@@ -5,10 +5,23 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "clean": "turbo run clean && rm -rf node_modules",
+    "setup:python": "bash scripts/setup-python.sh",
     "health:fix": "node core/orchestrator.js health_check --fix",
-    "system:local": "bash scripts/run-dev-stack.sh",
+    "infra:up": "docker volume prune -f && docker compose -f core/docker-compose.yml up -d",
+    "infra:down": "docker compose -f core/docker-compose.yml down",
+    "db:init": "bash scripts/strategy/init-supabase.sh",
+    "mission:activate": "node core/execute-activation-mission.js",
+    "system:activate": "pnpm setup:python && pnpm infra:up && pnpm db:init && pnpm mission:activate",
+    "system:local": "pnpm system:activate && turbo run dev",
     "crew:discuss-routing": "bash scripts/strategy/route-emergency.sh",
-    "crew:fix-routing": "bash scripts/strategy/fix-lounge-route.sh"
+    "crew:fix-routing": "bash scripts/strategy/fix-lounge-route.sh",
+    "crew:reconstruct-ui": "node scripts/strategy/ui-reconstruction.js",
+    "crew:fix-ui-syntax": "node scripts/strategy/ui-syntax-fix.js",
+    "crew:convene": "node scripts/strategy/crew-convention.js",
+    "crew:refactor-to-ts": "node scripts/strategy/language-convergence.js"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.10"
   },
   "devDependencies": {
     "turbo": "^1.12.0"

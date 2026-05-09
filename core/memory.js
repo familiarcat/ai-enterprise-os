@@ -7,7 +7,6 @@
 const EventEmitter = require('events');
 const Redis = require('ioredis');
 const { createClient } = require('@supabase/supabase-js');
-const { recallMemory, invokeCrewAgent, MODEL_CONFIG, storeMissionResult, discernHumanNeed, discoverMcpTools } = require('./orchestrator');
 
 let _redis = null;
 let _supabase = null;
@@ -50,7 +49,6 @@ function getMemorySystems() {
   return { redis: _redis, supabase: _supabase };
 }
 
-module.exports = { getMemorySystems, resetMemorySystems, eventBus: _eventBus, runMission };
 /**
  * runMission: Core mission execution logic refactored for Composable Cognitive Infrastructure.
  * Utilizes the MCPContext interface for all agentic reasoning.
@@ -58,8 +56,14 @@ module.exports = { getMemorySystems, resetMemorySystems, eventBus: _eventBus, ru
  * @param {Object} context - Standardized MCPContext envelope.
  * @returns {Promise<Object>} Mission results and generated plan.
  */
-
 async function runMission(context) {
+  // Lazy-destructure required functions to ensure the orchestrator is fully loaded 
+  // before these tools are invoked in the execution loop.
+  const orchestrator = require('./orchestrator');
+  const { 
+    recallMemory, invokeCrewAgent, MODEL_CONFIG, storeMissionResult, discernHumanNeed, discoverMcpTools 
+  } = orchestrator;
+
   // Normalize context from MCPContext interface
   const {
     sessionId, persona = 'captain_picard', task, memory = {}, constraints = [], metadata = {}
@@ -176,3 +180,5 @@ Re-implement the following task: "${task}"`;
     throw err;
   }
 }
+
+module.exports = { getMemorySystems, resetMemorySystems, eventBus: _eventBus, runMission };

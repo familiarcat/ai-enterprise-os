@@ -8,14 +8,50 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
-// Import Memory Systems from the Shared Kernel to resolve circular dependencies
+// Infrastructure imports - Moved to top to resolve circular initialization 
+// issues and Temporal Dead Zone (TDZ) errors in test environments.
 const { getMemorySystems, resetMemorySystems, runMission } = require('./memory.js');
 const { incrementTokenUsage } = require('./repository.js');
 
 /**
- * Verifies the integrity of external memory connections (Redis and Supabase).
+ * Internal helper to resolve the correct Python binary for agent tools.
  */
-async function verifyIntegrity() {
+function getPythonBin() {
+  if (process.env.PYTHON_BIN && fs.existsSync(process.env.PYTHON_BIN)) {
+    return process.env.PYTHON_BIN;
+  }
+
+  const candidates = [
+    path.resolve(__dirname, '../.venv313/bin/python3.13'),
+    path.resolve(__dirname, '../.venv313/bin/python3'),
+    path.resolve(__dirname, '../.venv/bin/python3'),
+    path.resolve(__dirname, '../.venv/bin/python'),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+
+  return 'python3';
+}
+
+/**
+ * Internal helper to ensure the Python environment is available before execution.
+ */
+function verifyPythonEnv() {
+  const pythonBin = getPythonBin();
+  const check = spawnSync(pythonBin, ['-c', 'import crewai, pydantic, langchain_openai']);
+  if (check.status !== 0) {
+    console.warn(`\n${ROLES.geordi_la_forge}\n\n[ENGINEERING WARNING]: Python environment is degraded. Moving to Unified Language Initiative.`);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Verifies the integrity of external memory connections (Redis and Supabase).
+ * @param {boolean} fix - If true, attempts to install missing Python dependencies.
+ */
+async function verifyIntegrity(fix = false) {
   // Always reload .env so health checks reflect current file state regardless of process age
   require('dotenv').config({ path: path.resolve(__dirname, '../.env'), override: true });
   resetMemorySystems();
@@ -64,9 +100,20 @@ async function verifyIntegrity() {
 
   try {
     const pythonBin = getPythonBin();
-    const { spawnSync } = require('child_process');
-    const check = spawnSync(pythonBin, ['-c', 'import crewai, pydantic; print("ok")']);
-    report.python = check.status === 0 ? 'healthy' : 'error: missing required modules (crewai, pydantic). Run: pip install crewai pydantic';
+    const pythonModules = 'crewai, pydantic, langchain_openai';
+    const checkCmd = `import ${pythonModules}; print("ok")`;
+    let check = spawnSync(pythonBin, ['-c', checkCmd]);
+    
+    if (check.status !== 0 && fix) {
+      console.log(`[Geordi] Missing Python dependencies. Attempting automatic repair...`);
+      const repair = spawnSync(pythonBin, ['-m', 'pip', 'install', 'crewai', 'langchain-openai', 'pydantic'], { stdio: 'inherit' });
+      if (repair.status !== 0) {
+        console.error(`[Geordi] Repair failed with status ${repair.status}. Manual intervention required.`);
+      }
+      check = spawnSync(pythonBin, ['-c', checkCmd]);
+    }
+
+    report.python = check.status === 0 ? 'healthy' : `error: missing required modules (${pythonModules}). Run: pnpm setup:python`;
   } catch (err) {
     report.python = `error: ${err.message}`;
   }
@@ -159,45 +206,12 @@ const WORF_EXCLUSIONS = [
   'CLAUDE.md',
   'README.md',
   'PLATFORM_CONSTITUTION.md',
+  'core/docker-compose.yml',
   'apps/vscode/media/',
   'apps/vscode/out/',
   'dist/',
   'crew-memories/'
 ];
-
-/**
- * Internal helper to ensure the Python environment is available before execution.
- */
-function getPythonBin() {
-  if (process.env.PYTHON_BIN) {
-    if (fs.existsSync(process.env.PYTHON_BIN)) return process.env.PYTHON_BIN;
-    // Configured path missing — fall through to auto-detect rather than hard-fail
-  }
-
-  // Prefer venv313 (Python 3.13, crewai-compatible) over legacy venv
-  const candidates = [
-    path.resolve(__dirname, '../.venv313/bin/python3.13'),
-    path.resolve(__dirname, '../.venv313/bin/python3'),
-    path.resolve(__dirname, '../.venv/bin/python3'),
-  ];
-  for (const p of candidates) {
-    if (fs.existsSync(p)) return p;
-  }
-
-  return 'python3';
-}
-
-/**
- * Internal helper to ensure the Python environment is available before execution.
- */
-function verifyPythonEnv() {
-  const pythonBin = getPythonBin();
-  const { spawnSync } = require('child_process');
-  const check = spawnSync(pythonBin, ['-c', 'import crewai']);
-  if (check.status !== 0) {
-    throw new Error(`\n${ROLES.geordi_la_forge}\n\n[ENGINEERING ALERT]: Critical module 'crewai' not found in ${pythonBin}.\nTo restore the intermix ratio, run: pnpm setup:python`);
-  }
-}
 
 /**
  * Bridge to invoke the Python-based UnzipSearchTool.
@@ -209,7 +223,9 @@ function verifyPythonEnv() {
 function invokeUnzipSearchTool(options) {
   return new Promise((resolve, reject) => {
     try {
-      verifyPythonEnv();
+      if (verifyPythonEnv() === false) {
+        return reject(new Error("Python environment degraded: missing required modules for search."));
+      }
     } catch (err) {
       return reject(err);
     }
@@ -302,7 +318,9 @@ function invokeYoutubeTranscriptTool(url) {
 function invokeCrewAgent(options) {
   return new Promise((resolve, reject) => {
     try {
-      verifyPythonEnv();
+      if (verifyPythonEnv() === false) {
+        return reject(new Error("Python environment degraded: missing required modules for CrewAI. Run 'health_check --fix'"));
+      }
     } catch (err) {
       return reject(err);
     }
@@ -425,15 +443,18 @@ async function sensorSweep() {
       function_name: 'root', 
       return_tree: true,
       exclude_dirs: ["node_modules", ".git", "dist", ".next"] 
-    })
+    }).catch(err => `[ENGINEERING WARNING]: Unable to scan directory structure via Python. ${err.message}`)
   ]);
 
   // Get Git Status for the sweep
   const gitStatus = spawnSync('git', ['status', '--short'], { cwd: projectPath }).stdout.toString();
   const stagedFiles = spawnSync('git', ['diff', '--cached', '--name-only'], { cwd: projectPath }).stdout.toString().split('\n').filter(Boolean);
   const securityViolations = worfSecurityScan(stagedFiles, projectPath);
-  
-  const domains = fs.readdirSync(path.resolve(projectPath, 'domains')).filter(d => !d.startsWith('.'));
+
+  const domainsPath = path.resolve(projectPath, 'domains');
+  const domains = fs.existsSync(domainsPath) 
+    ? fs.readdirSync(domainsPath).filter(d => !d.startsWith('.'))
+    : [];
 
   return {
     status: (integrity.env === 'healthy' && securityViolations.length === 0) ? 'NOMINAL' : 'DEGRADED',
@@ -495,13 +516,22 @@ async function discoverMcpTools(query, persona = 'captain_picard') {
   for (const registry of registries) {
     try {
       const response = await fetch(registry.url, { signal: AbortSignal.timeout(5000) });
-      if (response.ok) {
+      if (response.ok && response.headers.get('content-type')?.includes('application/json')) {
         const data = await response.json();
         results.push({ registry: registry.name, data });
       }
     } catch (err) {
       console.warn(`[Discovery] Failed to search ${registry.name}: ${err.message}`);
     }
+  }
+
+  // If no external tools are found, skip the LLM selection mission to save tokens and prevent crashes
+  if (results.length === 0) {
+    return {
+      query,
+      recommendation: "No specialized MCP tools discovered in external registries. Proceeding with core system capabilities.",
+      registries_searched: registries.map(r => r.name)
+    };
   }
 
   // Enrichment: Use the LLM to select the best tool from results based on the persona
@@ -994,6 +1024,25 @@ async function handleToolCall(name, args, { notify = () => {} } = {}) {
         notify(`[Batch] ${info.index + 1}/${info.total}: ${info.objective}`);
       });
 
+    case 'docker_build':
+      return await new Promise((resolve) => {
+        const { tag, dockerfile, context = '.' } = args;
+        notify(`[Geordi] Initiating local Docker build: ${tag}...`);
+        const cmd = spawnSync('docker', ['build', '-t', tag, '-f', dockerfile, context], { 
+          cwd: path.resolve(__dirname, '..'), encoding: 'utf-8' 
+        });
+        resolve({ status: cmd.status === 0 ? 'SUCCESS' : 'ERROR', stdout: cmd.stdout, stderr: cmd.stderr });
+      });
+
+    case 'terraform_plan':
+      return await new Promise((resolve) => {
+        notify(`[Data] Executing Terraform plan for: ${args.dir}...`);
+        const cmd = spawnSync('terraform', ['-chdir=' + args.dir, 'plan'], { 
+          cwd: path.resolve(__dirname, '..'), encoding: 'utf-8' 
+        });
+        resolve({ status: cmd.status === 0 ? 'SUCCESS' : 'ERROR', stdout: cmd.stdout, stderr: cmd.stderr });
+      });
+
     case 'get_versions_hierarchy':
       return await getVersionsHierarchy();
 
@@ -1063,7 +1112,7 @@ async function handleToolCall(name, args, { notify = () => {} } = {}) {
       return { status: "INITIATED", message: `Release for ${args.domain} dispatched.` };
 
     case 'health_check':
-      const integrity = await verifyIntegrity();
+      const integrity = await verifyIntegrity(args.fix);
       return { status: Object.values(integrity).every(v => v === 'healthy') ? 'healthy' : 'degraded', memory_systems: integrity };
 
     default:
@@ -1218,13 +1267,34 @@ if (require.main === module) {
   }
 }
 
-module.exports = { 
-  runMission, invokeUnzipSearchTool, invokeCrewAgent, sensorSweep,
-  integrateMcpTool, worfSecurityAudit, gitOperation, 
-  verifyIntegrity, listAvailableMCPs, syncMCPRegistry, worfSecurityScan, gitmcpSearch, generateROIReport,
-  recallMemory, storeMissionResult, generateEmbedding,
-  runMissions, getVersionsHierarchy, manageProject, manageSprint, manageTask,
-  listSkills, getSkill,
-  handleToolCall, CREW_PERSONAS, conductRollCall, discernHumanNeed,
-  discoverMcpTools // Export discovery engine
-};
+
+Object.assign(exports, {
+  runMission,
+  invokeUnzipSearchTool,
+  invokeCrewAgent,
+  sensorSweep,
+  integrateMcpTool,
+  worfSecurityAudit,
+  gitOperation,
+  verifyIntegrity,
+  listAvailableMCPs,
+  syncMCPRegistry,
+  worfSecurityScan,
+  gitmcpSearch,
+  generateROIReport,
+  recallMemory,
+  storeMissionResult,
+  generateEmbedding,
+  runMissions,
+  getVersionsHierarchy,
+  manageProject,
+  manageSprint,
+  manageTask,
+  listSkills,
+  getSkill,
+  handleToolCall,
+  CREW_PERSONAS,
+  conductRollCall,
+  discernHumanNeed,
+  discoverMcpTools,
+});

@@ -158,6 +158,28 @@ const TOOL_DEFINITIONS = [
     }
   },
   {
+    name: "docker_build",
+    description: "Build a local Docker image from a context and Dockerfile.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        tag: { type: "string", description: "Tag for the image (e.g. mcp-server:latest)" },
+        dockerfile: { type: "string", description: "Path to Dockerfile relative to root" },
+        context: { type: "string", description: "Build context path relative to root" }
+      },
+      required: ["tag", "dockerfile"]
+    }
+  },
+  {
+    name: "terraform_plan",
+    description: "Execute a terraform plan in a specified directory to preview infrastructure changes.",
+    inputSchema: {
+      type: "object",
+      properties: { dir: { type: "string", description: "Directory containing terraform files" } },
+      required: ["dir"]
+    }
+  },
+  {
     name: "sensor_sweep",
     description: "Perform a comprehensive architectural scan of all components, domains, and system integrity.",
     inputSchema: { type: "object", properties: {} }

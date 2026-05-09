@@ -1,8 +1,8 @@
-import { createClient } from '@supabase/supabase-js';
+const { createClient } = require('@supabase/supabase-js');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
-export const getProjectUsage = async (projectId) => {
+const getProjectUsage = async (projectId) => {
   const { data, error } = await supabase
     .from('token_usage')
     .select('*')
@@ -24,7 +24,7 @@ export const getProjectUsage = async (projectId) => {
  * @param {string} projectId - The unique identifier for the project.
  * @param {number} amount - The number of tokens consumed by the mission.
  */
-export const incrementTokenUsage = async (projectId, amount) => {
+const incrementTokenUsage = async (projectId, amount) => {
   const { data: currentUsage } = await supabase
     .from('token_usage')
     .select('tokens_used')
@@ -49,3 +49,5 @@ export const incrementTokenUsage = async (projectId, amount) => {
 
   return data;
 };
+
+module.exports = { getProjectUsage, incrementTokenUsage };

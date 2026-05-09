@@ -17,7 +17,7 @@ const { mockSupabase, mockRedis, mockSpawn } = vi.hoisted(() => ({
   mockSpawn: vi.fn(() => {
     let onData;
     let onClose;
-    return {
+    return { // This mock is for Python tools
       stdin: {
         write: vi.fn((data) => {
           const args = JSON.parse(data);
@@ -58,6 +58,7 @@ vi.mock('@supabase/supabase-js', () => ({
 }));
 vi.mock('ioredis', () => {
   // Return the constructor directly for CommonJS require interoperability.
+  // Return the constructor directly for CommonJS require interoperability
   const RedisConstructor = vi.fn().mockImplementation(() => mockRedis);
   return RedisConstructor;
 });
@@ -68,6 +69,11 @@ vi.mock('child_process', () => ({
 // 3. Import logic AFTER mocks are established to prevent leakage.
 import * as orchestrator from './orchestrator';
 import fs from 'fs';
+
+// Mock the new unzipSearchTool directly
+vi.mock('./tools/unzip-search', () => ({
+  unzipSearchTool: vi.fn().mockResolvedValue('--- Found in mock ---\nMocked JS Search Result')
+}));
 
 describe('Orchestrator Mission Logic', () => {
   beforeEach(() => {
@@ -108,8 +114,10 @@ describe('Orchestrator Mission Logic', () => {
     resetMemorySystems();
     fs.existsSync.mockReturnValue(false);
     fs.readdirSync.mockReturnValue([]);
+    fs.readdirSync.mockReturnValue([]); // Mock for getVersionsHierarchy, etc.
   });
 
+  
   afterEach(() => {
     vi.resetAllMocks();
   });
@@ -117,11 +125,13 @@ describe('Orchestrator Mission Logic', () => {
   it('should generate a mission plan and handle evolution history', async () => {
     vi.spyOn(orchestrator, 'storeMissionResult').mockResolvedValue();
     const objective = 'create new test objective';
-    
-    const result = await orchestrator.runMission('.', objective);
+
+    const result = await orchestrator.runMission({ sessionId: 'test-session', task: objective });
     
     expect(result).toHaveProperty('plan');
-    expect(result).toHaveProperty('decision');
+    // The runMission result structure is different now, it returns { status, content, plan, reflection }
+    expect(result).toHaveProperty('status', 'SUCCESS');
+    expect(result).toHaveProperty('plan', objective);
   });
 describe('Self-Correction Loop', () => {
     it('should trigger remediation when Worf detects a mock secret', async () => {
@@ -199,7 +209,7 @@ describe('Self-Correction Loop', () => {
       fs.existsSync.mockReturnValue(true);
       fs.lstatSync.mockReturnValue({ isFile: () => true });
 
-      await orchestrator.runMission('.', objective);
+      await orchestrator.runMission({ sessionId: 'remediation-test', task: objective });
 
       // Verify self-correction: should have called developer twice
       expect(generationCount).toBe(2); 

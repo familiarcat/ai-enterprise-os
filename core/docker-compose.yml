@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Local Supabase Database (Postgres)
+  db:
+    image: supabase/postgres:15.1.0.147
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: postgres
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Local Supabase REST API (PostgREST)
+  rest:
+    image: postgrest/postgrest:v10.1.1
+    ports:
+      - "3000:3000"
+    environment:
+      PGRST_DB_URI: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/postgres
+      PGRST_DB_SCHEMA: public
+      PGRST_DB_ANON_ROLE: anon
+    depends_on:
+      db:
+        condition: service_healthy
+
+  mcp-engine:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - "3002:3002"
+    env_file: ../.env
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - SUPABASE_URL=http://rest:3000
+      - SUPABASE_KEY=${SUPABASE_KEY:-local-development-key}
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      rest:
+        condition: service_healthy
+    volumes:
+      - ..:/app
+      - /app/node_modules
+      # Mount docker socket to allow the engine to run docker builds
+      - /var/run/docker.sock:/var/run/docker.sock
