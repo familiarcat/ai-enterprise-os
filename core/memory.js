@@ -61,7 +61,7 @@ async function runMission(context) {
   // before these tools are invoked in the execution loop.
   const orchestrator = require('./orchestrator');
   const { 
-    recallMemory, invokeCrewAgent, MODEL_CONFIG, storeMissionResult, discernHumanNeed, discoverMcpTools 
+    recallMemory, invokeCrewAgent, MODEL_CONFIG, storeMissionResult, discernHumanNeed, discoverMcpTools, calculateTaskComplexity 
   } = orchestrator;
 
   // Normalize context from MCPContext interface
@@ -71,13 +71,22 @@ async function runMission(context) {
 
   console.log(`[Captain Picard] Session ${sessionId}: Engaging v11 execution loop for task: ${task.substring(0, 50)}...`);
 
+  // 0a. STRATEGIC ARBITRAGE (Quark): Determine optimal model based on complexity
+  const complexity = calculateTaskComplexity(task);
+  let activeModel = metadata.modelTier || MODEL_CONFIG[persona];
+  
+  if (complexity < 0.4 && !metadata.modelTier) {
+    console.log(`[Quark] Low complexity detected (${complexity}). Routing to optimized tier: TIER_STRATEGIC`);
+    activeModel = MODEL_CONFIG.TIER_STRATEGIC; // Map to Haiku/Flash
+  }
+
   // 0. DISCOVERY PHASE (Autonomous Agency): Agent selects specialized tools based on task context
   console.log(`[Orchestrator] ${persona} is instantiating autonomous agency and selecting specialized tools...`);
   const discovery = await discoverMcpTools(task, persona);
   const toolInsights = `\n[Agent Discovery Log]: Verified tools selected for this persona: ${discovery.registries_searched.join(', ')}.\nRecommendation: ${discovery.recommendation}\n`;
 
   // Strictly use normalized memory properties
-  const contextWindow = (memory.longTerm?.join('\n\n') || await recallMemory(task)) + toolInsights;
+  const contextWindow = (memory.longTerm?.join('\n\n') || await recallMemory(task, metadata.project)) + toolInsights;
 
   try {
     let executionResponse = '';
@@ -96,7 +105,7 @@ async function runMission(context) {
         objective: currentTask,
         persona,
         context: contextWindow,
-        model: metadata.modelTier || MODEL_CONFIG[persona],
+        model: activeModel,
         constraints,
         metadata
       });

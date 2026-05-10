@@ -49,6 +49,55 @@ function verifyPythonEnv() {
 }
 
 /**
+ * Internal helper to resolve project metadata from Supabase or Redis cache.
+ * Prevents hardcoding project-specific scope and context in the engine.
+ */
+async function resolveProjectMetadata(projectId) {
+  if (!projectId) return null;
+  const { redis, supabase } = getMemorySystems();
+  const cacheKey = `project:context:${projectId}`;
+  
+  try {
+    const cached = await redis.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('id', projectId)
+      .single();
+
+    if (data) {
+      await redis.set(cacheKey, JSON.stringify(data), 'EX', 3600);
+      return data;
+    }
+  } catch (err) {
+    console.warn(`[Orchestrator] Warning: Could not resolve metadata for project ${projectId}.`);
+  }
+  return null;
+}
+
+/**
+ * Internal helper to calculate task complexity.
+ * Used for model tier arbitrage to optimize token usage and speed.
+ * @param {string} task - The objective text.
+ * @returns {number} Score from 0.0 (simple) to 1.0 (highly complex).
+ */
+function calculateTaskComplexity(task) {
+  if (!task) return 0;
+  let score = 0.2; // Base complexity
+  
+  if (task.length > 500) score += 0.3;
+  if (/\b(scaffold|refactor|architect|integrate|evolve)\b/i.test(task)) score += 0.3;
+  if (/\b(analyze|check|search|list|status)\b/i.test(task)) score -= 0.1;
+  
+  // Clamp between 0 and 1
+  const finalScore = Math.min(Math.max(score, 0), 1);
+  console.log(`[Quark] Task complexity calculated: ${finalScore.toFixed(2)}`);
+  return finalScore;
+}
+
+/**
  * Verifies the integrity of external memory connections (Redis and Supabase).
  * @param {boolean} fix - If true, attempts to install missing Python dependencies.
  */
@@ -246,7 +295,7 @@ function invokeYoutubeTranscriptTool(url) {
       if (code === 0) {
         try {
           const result = JSON.parse(stdout);
-          if (result.success) resolve(result.transcript);
+          if (result.success) resolve(result);
           else reject(new Error(result.error));
         } catch (e) {
           reject(new Error("Failed to parse Python output"));
@@ -506,11 +555,14 @@ async function discoverMcpTools(query, persona = 'captain_picard') {
 async function integrateMcpTool(project, query, persona = 'captain_picard', deploymentConfig = {}) {
   console.log(`[Bridge] ${persona} initiating Pinnacle integration for: ${query} (Deployment: ${deploymentConfig.subdomain || 'local'})`);
   
+  const projectId = project || process.env.ACTIVE_PROJECT_ID;
+  const projectMeta = await resolveProjectMetadata(projectId);
+
   // 1. Discovery via GitMCP with persona insight
   const discovery = await gitmcpSearch(query, persona);
   
   // Simulation: construct a tool specification based on the discovery
-  const toolName = `${query}_mcp_service`.replace(/[^a-z0-9_]/gi, '_');
+  const toolName = `${query}_mcp_service`.replace(/[^a-z0-9_]/gi, '_').toLowerCase();
   const toolSpec = {
     name: toolName,
     source: `https://gitmcp.io/verified/${query}`,
@@ -555,7 +607,12 @@ async function integrateMcpTool(project, query, persona = 'captain_picard', depl
       shortTerm: [],
       longTerm: [await recallMemory(uiObjective)]
     },
-    metadata: { project, ...deploymentConfig, modelTier: MODEL_CONFIG[persona] }
+    metadata: { 
+      project: projectId, 
+      ...projectMeta, 
+      ...deploymentConfig, 
+      modelTier: MODEL_CONFIG[persona] 
+    }
   });
 
   return {
@@ -756,16 +813,22 @@ async function generateEmbedding(text) {
 
 /**
  * Recalls historical data from both 'missions' and 'observations' tables.
+ * Now supports project-level isolation to prevent context leakage.
  */
-async function recallMemory(task, category = null) {
+async function recallMemory(task, projectId = null, category = null) {
   const { redis, supabase } = getMemorySystems();
-  const cacheKey = `memory:context:${category || 'all'}:${Buffer.from(task).toString('hex').substring(0, 32)}`;
+  const cacheKey = `memory:context:${projectId || 'global'}:${category || 'all'}:${Buffer.from(task).toString('hex').substring(0, 32)}`;
   try {
     const cachedResult = await redis.get(cacheKey);
     if (cachedResult) return cachedResult;
     const embedding = await generateEmbedding(task);
     if (!embedding) return "Memory recall unavailable.";
-    const matchParams = { query_embedding: embedding, match_threshold: 0.4, match_count: 5 };
+    const matchParams = { 
+      query_embedding: embedding, 
+      match_threshold: 0.4, 
+      match_count: 5,
+      p_project_id: projectId 
+    };
     const [missionRes, observationRes] = await Promise.all([
       supabase.rpc('match_missions', matchParams),
       supabase.rpc('match_observations', category ? { ...matchParams, filter: { category } } : matchParams)
@@ -789,7 +852,7 @@ async function storeMissionResult(content, metadata = {}) {
     if (!embedding) return;
 
     // 1. Calculate Token and Cost Estimates (v11 Economics)
-    const tokenEstimate = Math.ceil(content.length / 4); // Standard heuristic
+    const tokenEstimate = Math.ceil(content.length / 3.8); // Refined heuristic for Enterprise-heavy text
     const persona = metadata.persona || 'captain_picard';
     const modelUsed = metadata.modelTier || MODEL_CONFIG[persona] || 'anthropic/claude-3-haiku';
     
@@ -821,7 +884,7 @@ async function storeMissionResult(content, metadata = {}) {
     }]);
 
     // 2. Increment global project billing (v11 Economics)
-    const projectId = metadata.project || 'sovereign';
+    const projectId = metadata.project || process.env.ACTIVE_PROJECT_ID || 'global_audit';
     await incrementTokenUsage(projectId, tokenEstimate);
     
     console.log(`[Quark] Mission persisted. Estimated Cost: $${costEstimateUsd.toFixed(6)} (${tokenEstimate} tokens)`);
@@ -957,12 +1020,15 @@ async function handleToolCall(name, args, { notify = () => {} } = {}) {
 
     case 'run_factory_mission': {
       const context = args.context || args; // Support both flat and wrapped args
+      const projectId = context.metadata?.project || process.env.ACTIVE_PROJECT_ID;
+      const projectMeta = await resolveProjectMetadata(projectId);
       const personaKey = normalisePersonaKey(context.persona);
       const personaConfig = CREW_PERSONAS[personaKey];
       return await runMission({
         ...context,
         persona: personaKey,
         metadata: {
+          ...projectMeta,
           ...context.metadata,
           modelTier: context.metadata?.modelTier || personaConfig?.model
         }
@@ -1045,6 +1111,45 @@ async function handleToolCall(name, args, { notify = () => {} } = {}) {
     case 'gitmcp_search':
       return await gitmcpSearch(args.query);
 
+    case 'ingest_youtube_deep': {
+      const { url, project } = args;
+      const projectId = project || process.env.ACTIVE_PROJECT_ID;
+      const projectMeta = await resolveProjectMetadata(projectId);
+      
+      notify(`[Uhura] Initiating deep frequency scan for: ${url}...`);
+      
+      // Use enhanced scraper logic (transcript + resources + description)
+      const deepData = await invokeYoutubeTranscriptTool(url); 
+      
+      const ingestPersona = 'lt_uhura';
+      const summary = await invokeCrewAgent({
+        objective: `Analyze this enriched YouTube resource within the context of the Sovereign Factory (Business-as-Code):
+${JSON.stringify(deepData, null, 2)}
+
+Project Context: ${projectMeta?.scope || 'General Architectural Evolution'}
+
+Hyperspecific Extraction Task:
+1. Identify core MCP primitives and AI philosophy mentioned (e.g., Tool Discovery, Context Standardization).
+2. Map technical solutions to our DDD layers: Domain (Logic), Application (Use Cases), Infrastructure (MCP/API), and UI.
+3. Extract "Conceptets": Specific, modular architectural patterns that can be translated into code.
+4. Identify external GitHub/MCP resources for the 'discover_mcp_tools' pipeline.
+5. Formulate a phased refactor theory to optimize our token usage and system speed using these concepts.`,
+        persona: ingestPersona,
+        model: MODEL_CONFIG.lt_uhura
+      });
+
+      await storeMissionResult(summary, {
+        type: 'youtube_ingestion',
+        source_url: url,
+        project: projectId,
+        persona: ingestPersona,
+        video_id: deepData.video_id,
+        complexity: calculateTaskComplexity(summary)
+      });
+
+      return { status: 'SUCCESS', message: 'Resource ingested into vector memory', summary };
+    }
+
     case 'discover_mcp_tools':
       notify(`[Discovery] Initiating multi-registry scan for: ${args.query}...`);
       return await discoverMcpTools(args.query, args.persona || 'commander_data');
@@ -1117,10 +1222,17 @@ async function runMissions(missions, limit = 5, progressCallback = () => {}) {
   const pLimit = (await import('p-limit')).default(limit);
   const tasks = missions.map((mission, index) => pLimit(async () => {
     progressCallback({ index, total: missions.length, objective: mission.objective });
+    const projectId = mission.project || process.env.ACTIVE_PROJECT_ID;
+    const projectMeta = await resolveProjectMetadata(projectId);
+    
     const res = await runMission({
       sessionId: `batch-${Date.now()}-${index}`,
       task: mission.objective,
-      metadata: { project: mission.project, batch: true }
+      metadata: { 
+        ...projectMeta,
+        project: projectId, 
+        batch: true 
+      }
     });
     return { mission: mission.objective, status: 'SUCCESS', output: res };
   }));
@@ -1276,4 +1388,6 @@ Object.assign(exports, {
   conductRollCall,
   discernHumanNeed,
   discoverMcpTools,
+  resolveProjectMetadata,
+  calculateTaskComplexity,
 });
