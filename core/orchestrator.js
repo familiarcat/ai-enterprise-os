@@ -455,11 +455,27 @@ async function sensorSweep() {
     ? fs.readdirSync(domainsPath).filter(d => !d.startsWith('.'))
     : [];
 
+  const versionsPath = path.resolve(projectPath, 'versions');
+  const adrFiles = fs.existsSync(versionsPath)
+    ? fs.readdirSync(versionsPath).filter(f => f.match(/^v\d+-/))
+    : [];
+
+  const recentAdrs = adrFiles
+    .sort((a, b) => {
+      const idA = parseInt(a.match(/^v(\d+)-/)[1], 10);
+      const idB = parseInt(b.match(/^v(\d+)-/)[1], 10);
+      return idB - idA;
+    })
+    .slice(0, 10)
+    .map(f => f.replace(/\.md$/, ''));
+
   return {
     status: (integrity.env === 'healthy' && securityViolations.length === 0) ? 'NOMINAL' : 'DEGRADED',
     timestamp: new Date().toISOString(),
     integrity,
     active_domains: domains,
+    adr_count: adrFiles.length,
+    recent_adrs: recentAdrs,
     git: { status: gitStatus || 'Clean', violations: securityViolations },
     structure: structure.split('--- Scanned Folders Tree ---')[1] || structure,
     crew_active_routing: MODEL_CONFIG
@@ -1062,6 +1078,9 @@ async function handleToolCall(name, args, { notify = () => {} } = {}) {
     case 'get_versions_hierarchy':
       return await getVersionsHierarchy();
 
+    case 'create_adr':
+      return await createADR(args.title, args.content, args.status, args.deciders);
+
     case 'manage_project':
       return await manageProject(args.project, args.action, args.details);
 
@@ -1339,6 +1358,43 @@ async function manageTask(project, action, task_id, details) {
 }
 
 /**
+ * createADR: Generates a new Architectural Decision Record in the /versions folder.
+ * Handles version numbering, slug generation, and frontmatter formatting.
+ */
+async function createADR(title, content, status = 'accepted', deciders = []) {
+  const versionsPath = path.resolve(__dirname, '../versions');
+  
+  if (!fs.existsSync(versionsPath)) {
+    fs.mkdirSync(versionsPath, { recursive: true });
+  }
+
+  const files = fs.readdirSync(versionsPath).filter(f => f.match(/^v\d+-/));
+  let nextId = 1;
+  if (files.length > 0) {
+    const ids = files.map(f => parseInt(f.match(/^v(\d+)-/)[1], 10));
+    nextId = Math.max(...ids) + 1;
+  }
+
+  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  const filename = `v${nextId}-${slug}.md`;
+  const fullPath = path.join(versionsPath, filename);
+
+  const adrContent = `---
+date: ${new Date().toISOString().split('T')[0]}
+status: ${status}
+deciders: ${deciders.join(', ') || 'AI Crew'}
+---
+
+# ADR ${nextId}: ${title}
+
+${content}
+`;
+
+  fs.writeFileSync(fullPath, adrContent);
+  return { status: 'SUCCESS', filename, path: fullPath };
+}
+
+/**
  * CLI Entry Point
  * Allows running orchestrator functions directly from the terminal (e.g. via pnpm scripts).
  */
@@ -1346,16 +1402,22 @@ if (require.main === module) {
   const args = process.argv.slice(2);
   const command = args[0];
   
-  if (command === 'health_check') {
-    const isFix = args.includes('--fix');
-    handleToolCall('health_check', { fix: isFix }).then(res => {
-      console.log(JSON.stringify(res, null, 2));
-      process.exit(res.status === 'healthy' ? 0 : 1);
-    }).catch(err => {
-      console.error(`[Orchestrator] CLI Error: ${err.message}`);
-      process.exit(1);
-    });
+  if (!command) {
+    console.log("Usage: node core/orchestrator.js <tool_name> [json_args]");
+    process.exit(0);
   }
+
+  const isHealthCheck = command === 'health_check';
+  const toolArgs = isHealthCheck ? { fix: args.includes('--fix') } : (args[1] ? JSON.parse(args[1]) : {});
+
+  handleToolCall(command, toolArgs).then(res => {
+    console.log(JSON.stringify(res, null, 2));
+    const isFailed = (isHealthCheck && res.status !== 'healthy') || (command === 'sensor_sweep' && res.status !== 'NOMINAL');
+    process.exit(isFailed ? 1 : 0);
+  }).catch(err => {
+    console.error(`[Orchestrator] CLI Error: ${err.message}`);
+    process.exit(1);
+  });
 }
 
 
@@ -1381,6 +1443,7 @@ Object.assign(exports, {
   manageProject,
   manageSprint,
   manageTask,
+  createADR,
   listSkills,
   getSkill,
   handleToolCall,

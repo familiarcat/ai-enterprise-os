@@ -76,6 +76,20 @@ const TOOL_DEFINITIONS = [
     inputSchema: { type: "object", properties: {} }
   },
   {
+    name: "create_adr",
+    description: "Create a new Architectural Decision Record (ADR) in the /versions directory.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "The title of the architectural decision" },
+        status: { type: "string", enum: ["proposed", "accepted", "deprecated", "superseded"], default: "accepted" },
+        content: { type: "string", description: "The full markdown content of the ADR" },
+        deciders: { type: "array", items: { type: "string" }, description: "List of crew members involved in the decision" }
+      },
+      required: ["title", "content"]
+    }
+  },
+  {
     name: "manage_project",
     description: "Initialize or update project-level metadata and context.",
     inputSchema: {

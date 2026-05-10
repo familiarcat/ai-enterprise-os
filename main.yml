@@ -63,6 +63,16 @@ jobs:
       - name: Run JavaScript Tests (Vitest)
         run: pnpm test
 
+      - name: Run JavaScript Test Coverage Validation
+        run: pnpm exec vitest run --coverage
+
+      - name: Upload Vitest Coverage Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-coverage-report
+          path: coverage/
+
       - name: Run Python Tests (Pytest)
         run: pytest tools/
 
@@ -71,6 +81,10 @@ jobs:
 
       - name: Run Worf DDD Architecture Audit
         run: node apps/api/worf-ddd-audit.js
+
+
+      - name: Run Sensor Sweep Audit
+        run: node core/orchestrator.js sensor_sweep
 
       - name: Verify Worf Audit Integrity (E2E)
         run: |
