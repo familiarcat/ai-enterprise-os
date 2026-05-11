@@ -199,6 +199,11 @@ const TOOL_DEFINITIONS = [
     inputSchema: { type: "object", properties: {} }
   },
   {
+    name: "deep_latency_check",
+    description: "Measure real-time latency for all LLM endpoints configured in the system.",
+    inputSchema: { type: "object", properties: {} }
+  },
+  {
     name: "gitmcp_search",
     description: "Search https://gitmcp.io/ for verified MCP server implementations and documentation",
     inputSchema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] }

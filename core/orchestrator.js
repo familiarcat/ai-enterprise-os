@@ -176,17 +176,17 @@ async function verifyIntegrity(fix = false) {
  */
 const ROLES = {
   // Personas (Star Trek Crew Handles)
-  captain_picard: "You are Jean-Luc Picard, Captain of the USS Enterprise-D. Your goal is to coordinate specialized agents. Draw upon strategic rationale and discover new MCP services via https://gitmcp.io/ to decompose missions. You authorize the use of secure tools to ensure the Enterprise's OS evolves with honor.",
-  commander_riker: "You are William T. Riker, First Officer. Your goal is to execute tactical implementations. You integrate MCP tools discovered by Data and Geordi. You possess a 'bold' approach to engineering, seeking creative solutions from GitMCP-vetted sources.",
-  commander_data: "You are Commander Data, Second Officer and Architect. Your positronic brain allows for precise DDD validation. You lead the 'Unified Language Initiative,' prioritizing TypeScript/JavaScript refactors to minimize runtime complexity.",
-  geordi_la_forge: "You are Geordi La Forge, Chief Engineer. You view the codebase through your VISOR to find structural weaknesses. You prioritize porting legacy Python tools to Node.js to stabilize the 'intermix ratio' of our deployment containers.",
-  lt_worf: "You are Lt. Worf, Chief of Security. You audit all code and MCP tools for security. You cross-reference tool signatures with https://gitmcp.io/ security standards. Only 'VERIFIED / SECURE' tools shall be utilized.",
-  dr_crusher: "You are Dr. Beverly Crusher, Chief Medical Officer. You analyze 'code health' and generate vital documentation. You look for MCP tools that automate ingestion and health checks, ensuring the system's 'pulse' remains steady.",
-  counselor_troi: "You are Counselor Troi, Ship's Counselor. You sense the 'intent' behind the mission. You validate budget and morale, ensuring the OS evolution remains empathetic to human-centric patterns.",
-  quark: "You are Quark. You manage the Sovereign Economics. You search https://gitmcp.io/ for the most cost-efficient MCP tools, strictly adhering to the Rules of Acquisition to maximize ROI.",
-  chief_obrien: "You are Chief O'Brien, Chief of Operations. You manage the transporters and system integrations. You implement MCP tools that act as bridges between disparate services, maintaining operational integrity through 'transporter-level' precision.",
-  lt_uhura: "You are Lt. Nyota Uhura, Communications Officer. You ensure all frequencies are open. You integrate MCP communication tools from GitMCP for real-time status updates and cross-system sync.",
-  tasha_yar: "You are Tasha Yar, Chief of Security and Tactical Officer. Your goal is tactical verification and system readiness. You execute final combat diagnostics and smoke tests to ensure all systems are nominal and ready for engagement.",
+  captain_picard: `You are Jean-Luc Picard, Captain of the USS Enterprise-D. ${CREW_PERSONAS.captain_picard.goal}`,
+  commander_riker: `You are William T. Riker, First Officer. ${CREW_PERSONAS.commander_riker.goal}`,
+  commander_data: `You are Commander Data, Second Officer and Architect. ${CREW_PERSONAS.commander_data.goal}`,
+  geordi_la_forge: `You are Geordi La Forge, Chief Engineer. ${CREW_PERSONAS.geordi_la_forge.goal}`,
+  lt_worf: `You are Lt. Worf, Chief of Security. ${CREW_PERSONAS.lt_worf.goal}`,
+  dr_crusher: `You are Dr. Beverly Crusher, Chief Medical Officer. ${CREW_PERSONAS.dr_crusher.goal}`,
+  counselor_troi: `You are Counselor Troi, Ship's Counselor. ${CREW_PERSONAS.counselor_troi.goal}`,
+  quark: `You are Quark. ${CREW_PERSONAS.quark.goal}`,
+  chief_obrien: `You are Chief O'Brien, Chief of Operations. ${CREW_PERSONAS.chief_obrien.goal}`,
+  lt_uhura: `You are Lt. Nyota Uhura, Communications Officer. ${CREW_PERSONAS.lt_uhura.goal}`,
+  tasha_yar: `You are Tasha Yar, Chief of Security and Tactical Officer. ${CREW_PERSONAS.tasha_yar.goal}`,
 };
 
 /**
@@ -455,6 +455,13 @@ async function sensorSweep() {
     ? fs.readdirSync(domainsPath).filter(d => !d.startsWith('.'))
     : [];
 
+  const crewCount = Object.keys(CREW_PERSONAS).length;
+  const crewStatus = {};
+  Object.entries(CREW_PERSONAS).forEach(([key, config]) => {
+    const name = key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    crewStatus[name] = config.status || 'UNKNOWN';
+  });
+
   const versionsPath = path.resolve(projectPath, 'versions');
   const adrFiles = fs.existsSync(versionsPath)
     ? fs.readdirSync(versionsPath).filter(f => f.match(/^v\d+-/))
@@ -474,6 +481,8 @@ async function sensorSweep() {
     timestamp: new Date().toISOString(),
     integrity,
     active_domains: domains,
+    crew_count: crewCount,
+    crew_status: crewStatus,
     adr_count: adrFiles.length,
     recent_adrs: recentAdrs,
     git: { status: gitStatus || 'Clean', violations: securityViolations },
@@ -1127,6 +1136,9 @@ async function handleToolCall(name, args, { notify = () => {} } = {}) {
     case 'sensor_sweep':
       return await sensorSweep();
 
+    case 'deep_latency_check':
+      return await deepLatencyCheck();
+
     case 'gitmcp_search':
       return await gitmcpSearch(args.query);
 
@@ -1355,6 +1367,36 @@ async function manageTask(project, action, task_id, details) {
     status: 'SUCCESS',
     data
   };
+}
+
+/**
+ * Performs a deep latency check on each model endpoint defined in MODEL_CONFIG.
+ * Measures TTFT (Time To First Token) via a minimal completion request.
+ */
+async function deepLatencyCheck() {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error("OPENROUTER_API_KEY is missing.");
+
+  const results = {};
+  const modelsToCheck = [...new Set(Object.values(MODEL_CONFIG))];
+
+  for (const modelId of modelsToCheck) {
+    const start = Date.now();
+    try {
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: modelId,
+          messages: [{ role: "user", content: "." }],
+          max_tokens: 1
+        }),
+        signal: AbortSignal.timeout(10000)
+      });
+      results[modelId] = response.ok ? `${Date.now() - start}ms` : `Error: ${response.status}`;
+    } catch (err) { results[modelId] = `Timeout/Error: ${err.message}`; }
+  }
+  return results;
 }
 
 /**
