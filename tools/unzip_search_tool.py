@@ -60,40 +60,41 @@ class UnzipSearchTool(BaseTool):
                 return f"Error: {path} is neither a directory nor a valid zip file."
 
             it_lower = item_type.lower()
+            safe_name = re.escape(function_name)
             if it_lower == "class":
                 # Class specific patterns (JS/TS and Python)
-                patterns = [rf"class\s+{function_name}\b"]
+                patterns = [rf"class\s+{safe_name}\b"]
             elif it_lower == "interface":
                 # TypeScript interface
-                patterns = [rf"interface\s+{function_name}\b"]
+                patterns = [rf"interface\s+{safe_name}\b"]
             elif it_lower == "type":
                 # TypeScript type alias
-                patterns = [rf"type\s+{function_name}\b"]
+                patterns = [rf"type\s+{safe_name}\b"]
             elif it_lower == "enum":
                 # TypeScript enum
-                patterns = [rf"enum\s+{function_name}\b"]
+                patterns = [rf"enum\s+{safe_name}\b"]
             elif it_lower in ["constant", "variable"]:
                 # Exported constants or variables (JS/TS and Python)
                 patterns = [
-                    rf"(?:export\s+)?(?:const|let|var)\s+{function_name}\b",
-                    rf"(?:exports|module\.exports|this)\.{function_name}\s*=",
-                    rf"^{function_name}\s*="
+                    rf"(?:export\s+)?(?:const|let|var)\s+{safe_name}\b",
+                    rf"(?:exports|module\.exports|this)\.{safe_name}\s*=",
+                    rf"^{safe_name}\s*="
                 ]
             else:
                 # Matches: Python def, JS/TS functions, Arrow functions, Object properties, 
                 # Shell functions, and Markdown headers.
                 patterns = [
-                    rf"def\s+{function_name}\s*\(",
-                    rf"(?:async\s+)?function\s+{function_name}\s*\(",
-                    rf"(?:const|let|var)\s+{function_name}\s*=\s*(?:async\s+)?(?:\([^)]*\)|[a-zA-Z_$][\w$]*)\s*=>",
-                    rf"^\s*(?:(?:public|private|protected|static|async|get|set)\s+)*\*?\s*{function_name}\s*\(",
-                    rf"{function_name}\s*:\s*(?:async\s+)?(?:function\b|(?:\([^)]*\)|[a-zA-Z_$][\w$]*)\s*=>)",
-                    rf"[\w$.]+\.{function_name}\s*=\s*(?:async\s+)?(?:function\b|(?:\([^)]*\)|[a-zA-Z_$][\w$]*)\s*=>)",
-                    rf"Object\.defineProperty\s*\(\s*[\w$.]+\s*,\s*['\"]{function_name}['\"]",
-                    rf"^\s*(?:(?:public|private|protected|static|readonly)\s+)*{function_name}\s*=\s*(?:async\s+)?(?:\([^)]*\)|[a-zA-Z_$][\w$]*)\s*=>",
-                    rf"\[\s*['\"]{function_name}['\"]\s*\]\s*(?:\(|:\s*(?:async\s+)?(?:function\b|(?:\([^)]*\)|[a-zA-Z_$][\w$]*)\s*=>))",
-                    rf"^\s*(?:function\s+)?{function_name}\s*(?:\(\s*\))?\s*\{{",
-                    rf"^#+\s+{function_name}\b"
+                    rf"def\s+{safe_name}\s*\(",
+                    rf"(?:async\s+)?function\s+{safe_name}\s*\(",
+                    rf"(?:const|let|var)\s+{safe_name}\s*=\s*(?:async\s+)?(?:\([^)]*\)|[a-zA-Z_$][\w$]*)\s*=>",
+                    rf"^\s*(?:(?:public|private|protected|static|async|get|set)\s+)*\*?\s+{safe_name}\s*\(",
+                    rf"{safe_name}\s*:\s*(?:async\s+)?(?:function\b|(?:\([^)]*\)|[a-zA-Z_$][\w$]*)\s*=>)",
+                    rf"[\w$.]+\.{safe_name}\s*=\s*(?:async\s+)?(?:function\b|(?:\([^)]*\)|[a-zA-Z_$][\w$]*)\s*=>)",
+                    rf"Object\.defineProperty\s*\(\s*[\w$.]+\s*,\s*['\"]{safe_name}['\"]",
+                    rf"^\s*(?:(?:public|private|protected|static|readonly)\s+)*{safe_name}\s*=\s*(?:async\s+)?(?:\([^)]*\)|[a-zA-Z_$][\w$]*)\s*=>",
+                    rf"\[\s*['\"]{safe_name}['\"]\s*\]\s*(?:\(|:\s*(?:async\s+)?(?:function\b|(?:\([^)]*\)|[a-zA-Z_$][\w$]*)\s*=>))",
+                    rf"^\s*(?:function\s+)?{safe_name}\s*(?:\(\s*\))?\s*\{{",
+                    rf"^#+\s+{safe_name}\b"
                 ]
 
             combined_pattern = re.compile("|".join(patterns))

@@ -4,16 +4,17 @@ import os
 from crewai import Agent, Task, Crew, Process
 from langchain_openai import ChatOpenAI
 
-def run_crew(task_description, agents_config, metadata=None):
+def run_crew(task_description, agents_config, metadata=None, model=None, expected_output=None):
     """
     Dynamically assembles a crew based on the provided configuration.
     """
     metadata = metadata or {}
     stage = metadata.get('stage', 'execution')
+    selected_model = model or os.getenv("CREW_MODEL", "anthropic/claude-3-sonnet")
 
     # Configure OpenRouter via LangChain
     llm = ChatOpenAI(
-        model=os.getenv("CREW_MODEL", "anthropic/claude-3-sonnet"),
+        model=selected_model,
         openai_api_key=os.getenv("OPENROUTER_API_KEY"),
         openai_api_base="https://openrouter.ai/api/v1",
         default_headers={
@@ -35,10 +36,11 @@ def run_crew(task_description, agents_config, metadata=None):
         created_agents.append(agent)
 
     # Define the primary task
-    expected_output = "A comprehensive implementation plan or code block based on the mission objective."
-    if stage == 'reflection':
-        # Align expected output with v11 reflection engine requirements
-        expected_output = "A critical audit report including a quality score (1-10), identified weaknesses, and specific improvement recommendations."
+    if not expected_output:
+        expected_output = "A comprehensive implementation plan or code block based on the mission objective."
+        if stage == 'reflection':
+            # Align expected output with v11 reflection engine requirements
+            expected_output = "A critical audit report including a quality score (1-10), identified weaknesses, and specific improvement recommendations."
 
     main_task = Task(
         description=task_description,
@@ -72,22 +74,20 @@ if __name__ == "__main__":
         constraints = config.get('constraints', [])
         model_override = config.get('model')
         metadata = config.get('metadata', {})
+        expected_output_override = config.get('expected_output')
         stage = metadata.get('stage', 'execution')
         
         if not task_description:
             raise ValueError("Missing 'task' or 'objective' in payload.")
 
-        # Ensure the selected model is used by the LangChain/CrewAI logic
-        if model_override:
-            os.environ["CREW_MODEL"] = model_override
-
         # Extract structured agents or wrap the persona into a default mission lead
         agents_data = config.get('agents', [])
         if not agents_data:
+            safe_constraints = constraints if isinstance(constraints, list) else [str(constraints)]
             agents_data = [{
                 'role': persona,
                 'goal': task_description,
-                'backstory': f"Operational context: {context_window}. Tactical constraints: {', '.join(constraints)}"
+                'backstory': f"Operational context: {context_window}. Tactical constraints: {', '.join(safe_constraints)}"
             }]
 
         # Inject stage-specific prompting for better internal agent reflection
@@ -96,7 +96,13 @@ if __name__ == "__main__":
                 orig_backstory = agent.get('backstory') or ""
                 agent['backstory'] = f"[V11 REFLECTION ENGINE] {orig_backstory} Your primary directive is critical evaluation. Identify weaknesses, security risks, and technical debt."
 
-        result = run_crew(task_description, agents_data, metadata=metadata)
+        result = run_crew(
+            task_description, 
+            agents_data, 
+            metadata=metadata, 
+            model=model_override,
+            expected_output=expected_output_override
+        )
         
         # Return result as JSON to stdout
         print(json.dumps({
@@ -105,5 +111,8 @@ if __name__ == "__main__":
         }))
         
     except Exception as e:
-        sys.stderr.write(f"Crew Error: {str(e)}\n")
+        print(json.dumps({
+            "status": "error",
+            "error": str(e)
+        }))
         sys.exit(1)
