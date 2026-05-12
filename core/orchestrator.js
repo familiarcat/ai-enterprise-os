@@ -10,8 +10,8 @@ const os = require('os');
 
 // Infrastructure imports - Moved to top to resolve circular initialization 
 // issues and Temporal Dead Zone (TDZ) errors in test environments.
-const { getMemorySystems, resetMemorySystems, runMission } = require('./memory.js');
-const { MODEL_CONFIG, CREW_PERSONAS, normalisePersonaKey } = require('./crew-manifest.js');
+const { getMemorySystems, resetMemorySystems, runMission } = require('./MissionService.js');
+const { MODEL_CONFIG, CREW_PERSONAS, normalisePersonaKey, MISSION_PIPELINE, MISSION_PHASES } = require('./crew-manifest.js');
 const { incrementTokenUsage } = require('./repository.js');
 
 /**
@@ -459,7 +459,10 @@ async function sensorSweep() {
   const crewStatus = {};
   Object.entries(CREW_PERSONAS).forEach(([key, config]) => {
     const name = key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-    crewStatus[name] = config.status || 'UNKNOWN';
+    crewStatus[name] = {
+      status: config.status || 'UNKNOWN',
+      top_skills: (config.skills || []).slice(0, 3)
+    };
   });
 
   const versionsPath = path.resolve(projectPath, 'versions');
@@ -530,6 +533,15 @@ async function gitmcpSearch(query, persona = 'commander_data') {
 async function discoverMcpTools(query, persona = 'captain_picard') {
   console.log(`[Discovery] ${persona} is initiating a deep search for MCP libraries matching: "${query}"`);
   
+  const personaKey = normalisePersonaKey(persona);
+  const personaConfig = CREW_PERSONAS[personaKey];
+  
+  // Local Skill Matching: Identify which persona skills overlap with the current task query
+  const matchedSkills = personaConfig?.skills.filter(skill => 
+    query.toLowerCase().includes(skill.replace(/_/g, ' ')) || 
+    skill.split('_').some(word => query.toLowerCase().includes(word))
+  ) || [];
+
   const registries = [
     { name: 'GitMCP', url: `https://gitmcp.io/api/v1/search?q=${encodeURIComponent(query)}` },
     { name: 'GitHub', url: `https://api.github.com/search/repositories?q=mcp-server+${encodeURIComponent(query)}` }
@@ -560,7 +572,8 @@ async function discoverMcpTools(query, persona = 'captain_picard') {
 
   // Enrichment: Use the LLM to select the best tool from results based on the persona
   const selectionMission = await invokeCrewAgent({
-    objective: `Analyze these search results for "${query}" and select the most pragmatic MCP library for a "${persona}" persona.`,
+    objective: `Analyze these search results for "${query}" and select the most pragmatic MCP library for a "${persona}" persona.
+Relevant Skills to match: ${matchedSkills.join(', ') || 'General Engineering'}.`,
     persona: 'commander_data',
     context: JSON.stringify(results),
     model: MODEL_CONFIG.commander_data
@@ -1253,7 +1266,7 @@ async function runMissions(missions, limit = 5, progressCallback = () => {}) {
   const pLimit = (await import('p-limit')).default(limit);
   const tasks = missions.map((mission, index) => pLimit(async () => {
     progressCallback({ index, total: missions.length, objective: mission.objective });
-    const projectId = mission.project || process.env.ACTIVE_PROJECT_ID;
+    const projectId = mission.project || mission.metadata?.project || process.env.ACTIVE_PROJECT_ID;
     const projectMeta = await resolveProjectMetadata(projectId);
     
     const res = await runMission({
@@ -1495,4 +1508,7 @@ Object.assign(exports, {
   discoverMcpTools,
   resolveProjectMetadata,
   calculateTaskComplexity,
+  deepLatencyCheck,
+  MISSION_PIPELINE,
+  MISSION_PHASES,
 });

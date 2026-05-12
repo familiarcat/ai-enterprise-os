@@ -15,62 +15,61 @@ const { storeMissionResult } = require('../../core/orchestrator.js');
 
 // Hardened path resolution for script location
 const ROOT_DIR = path.resolve(__dirname, '../../');
-const SCRIPTS_DIR = path.join(ROOT_DIR, 'scripts');
-
-// Redundant DDD artifacts identified for decommissioning
-const REDUNDANT_DDD_ARTIFACTS = [
-  'MissionDTO.js',
-  'MissionRepository.js',
-  'mission-events.test.js',
-  'dishonorable-test.js',
-  'apps/api/MissionSubscriber.js',
-  'scripts/MissionService.js',
-  'scripts/MissionSubscriber.js',
-  'scripts/MissionRepository.js',
-  'core/MissionSubscriber.js',
-  'core/MissionRepository.js',
-  'core/MissionService.js',
-  'core/MissionDTO.js'
-];
+const MEMORIES_ACTIVE_DIR = path.join(ROOT_DIR, 'crew-memories/active');
+const MEMORIES_ARCHIVE_DIR = path.join(ROOT_DIR, 'crew-memories/archive');
 
 async function runPruningProtocol() {
   console.log('═══════════════════════════════════════════════════');
   console.log('  Geordi La Forge — Neural Pruning Protocol');
-  console.log('  Objective: Identify, Archive, and Purge Artifacts');
+  console.log('  Objective: Archive and Purge Active Memories');
   console.log('═══════════════════════════════════════════════════');
 
+  if (!fs.existsSync(MEMORIES_ACTIVE_DIR)) {
+    console.log(`[Geordi] No active neural pathways detected at ${MEMORIES_ACTIVE_DIR}.`);
+    process.exit(0);
+  }
+
+  if (!fs.existsSync(MEMORIES_ARCHIVE_DIR)) fs.mkdirSync(MEMORIES_ARCHIVE_DIR, { recursive: true });
+
   console.log('\n[Geordi] Consulting crew for synaptic memory registration...');
+  const files = fs.readdirSync(MEMORIES_ACTIVE_DIR).filter(f => f.endsWith('.json'));
   let prunedCount = 0;
 
-  for (const relPath of REDUNDANT_DDD_ARTIFACTS) {
-    const fullPath = path.join(ROOT_DIR, relPath);
-    if (fs.existsSync(fullPath)) {
-      console.log(`\n--- Processing: ${relPath} ---`);
-      const content = fs.readFileSync(fullPath, 'utf-8');
+  for (const filename of files) {
+    const fullPath = path.join(MEMORIES_ACTIVE_DIR, filename);
+    const stats = fs.statSync(fullPath);
+    
+    // Prune files older than 24 hours
+    const isOld = (Date.now() - stats.mtimeMs) > 24 * 60 * 60 * 1000;
 
-      // Synaptic Archiving: Register the logic in Supabase RAG before deletion
-      console.log(`  [Data] Registering legacy skill in Supabase...`);
+    if (isOld) {
+      console.log(`\n--- Processing Memory: ${filename} ---`);
+      const content = fs.readFileSync(fullPath, 'utf-8');
+      const memory = JSON.parse(content);
+
+      // Synaptic Archiving: Register the observation in Supabase RAG before deletion
+      console.log(`  [Data] Registering active observation in Supabase...`);
       await storeMissionResult(
-        `[LEGACY SKILL ARCHIVE] Pre-pruning preservation of ${relPath}.\n\nCode:\n${content}`,
+        `[AUTONOMOUS OBSERVATION ARCHIVE] ${memory.title || filename}\n\nSummary: ${memory.summary}\nContent: ${content}`,
         { 
-          type: 'legacy_archive', 
-          original_path: relPath, 
-          crew_member: 'commander_data'
+          type: 'memory_archive', 
+          crew_member: memory.crew_member || 'unknown',
+          category: memory.category || 'general'
         }
       );
 
       try {
-        fs.unlinkSync(fullPath);
-        console.log(`  [Geordi] Pruned: ${relPath}`);
+        fs.renameSync(fullPath, path.join(MEMORIES_ARCHIVE_DIR, filename));
+        console.log(`  [Geordi] Archived: ${filename}`);
         prunedCount++;
       } catch (err) {
-        console.error(`  ❌ Failed to prune ${relPath}: ${err.message}`);
+        console.error(`  ❌ Failed to archive ${filename}: ${err.message}`);
       }
     }
   }
 
   if (prunedCount > 0) {
-    console.log(`\n[Geordi] Successfully archived and purged ${prunedCount} redundant DDD artifacts.`);
+    console.log(`\n[Geordi] Successfully archived ${prunedCount} active memories.`);
   }
   process.exit(0);
 }

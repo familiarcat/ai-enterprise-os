@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-// Import resetMemorySystems from the new core/memory.js
-import { resetMemorySystems } from './memory.js';
+// Import resetMemorySystems from the core/MissionService.js
+import { resetMemorySystems } from './MissionService.js';
 // 1. Create stable hoisted mock objects to ensure the test and the factory share references.
 const { mockSupabase, mockRedis, mockSpawn } = vi.hoisted(() => ({
   mockSupabase: {
