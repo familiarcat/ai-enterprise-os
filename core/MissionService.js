@@ -62,7 +62,7 @@ async function runMission(context) {
   const orchestrator = require('./orchestrator');
   const { 
     recallMemory, invokeCrewAgent, MODEL_CONFIG, CREW_PERSONAS, MISSION_PIPELINE, MISSION_PHASES, normalisePersonaKey,
-    storeMissionResult, discernHumanNeed, discoverMcpTools, calculateTaskComplexity 
+    storeMissionResult, discernHumanNeed, discoverMcpTools, calculateTaskComplexity, deepLatencyCheck
   } = orchestrator;
 
   // Normalize context from MCPContext interface
@@ -83,6 +83,9 @@ async function runMission(context) {
     console.log(`[${CREW_PERSONAS.quark.role}] Low complexity detected (${complexity}). Routing to optimized tier: TIER_STRATEGIC`);
     activeModel = MODEL_CONFIG.TIER_STRATEGIC; // Map to Haiku/Flash
   }
+
+  // Fetch real-time latency telemetry for model selection optimization
+  const latencyReport = await deepLatencyCheck().catch(() => ({}));
 
   // 0. DISCOVERY PHASE (Autonomous Agency): Agent selects specialized tools based on task context
   console.log(`[Orchestrator] ${personaName} is instantiating autonomous agency and selecting specialized tools...`);
@@ -127,16 +130,28 @@ async function runMission(context) {
         };
         const phaseKey = phaseMap[agency.id];
         const candidates = MISSION_PHASES[phaseKey] || [agency.persona];
-        const selectedPersonaKey = candidates[0]; // Select the primary registered persona for the current phase
+        
+        // Dynamic Selection: Pick the first AVAILABLE candidate, effectively finding the "least busy" member
+        const selectedPersonaKey = candidates.find(c => CREW_PERSONAS[c].status === 'AVAILABLE') || candidates[0];
 
         const agencyPersona = CREW_PERSONAS[selectedPersonaKey];
         console.log(`[${agencyPersona.role}] Session ${sessionId}: Executing ${agency.label}...`);
 
+        // Optimized model selection for the audit task
+        const auditTask = agency.objective(executionResponse, task, constraints);
+        const auditComplexity = calculateTaskComplexity(auditTask);
+        let auditModel = MODEL_CONFIG[selectedPersonaKey];
+
+        // Apply model arbitrage to audits: use strategic tier for lower complexity to maximize speed
+        if (auditComplexity < 0.4 || (latencyReport[auditModel] && parseInt(latencyReport[auditModel]) > 5000)) {
+          auditModel = MODEL_CONFIG.TIER_STRATEGIC;
+        }
+
         const feedback = await invokeCrewAgent({
-          objective: agency.objective(executionResponse, task, constraints),
+          objective: auditTask,
           persona: selectedPersonaKey,
           context: contextWindow,
-          model: MODEL_CONFIG[selectedPersonaKey],
+          model: auditModel,
           metadata: { ...metadata, stage: agency.id }
         });
 

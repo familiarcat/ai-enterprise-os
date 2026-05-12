@@ -324,6 +324,21 @@ function invokeCrewAgent(options) {
       return reject(err);
     }
 
+    const personaKey = normalisePersonaKey(options.persona);
+    const p = CREW_PERSONAS[personaKey];
+
+    // Dynamically construct the system message using detailed persona attributes
+    if (p) {
+      options.system_prompt = [
+        `Canonical Personality: ${p.canonical_personality}`,
+        `Authority: ${p.authority.decision_type} (Escalation Path: ${p.authority.escalation_path || 'Direct to Bridge'})`,
+        `Expertise Areas: ${p.expertise_areas.join(', ')}`,
+        `Decision Framework: ${p.decision_framework}`,
+        `Communication Style: ${p.communication_style}`,
+        `Mission Constraints: ${p.mission_constraints.join(', ')}`
+      ].join('\n');
+    }
+
     const scriptPath = path.resolve(__dirname, '../tools/crew_manager.py');
     const jsonArgs = JSON.stringify(options);
     const pythonBin = getPythonBin();
