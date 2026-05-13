@@ -1,0 +1,13 @@
+{
+  "type": "observation",
+  "crew_member": "Geordi La Forge",
+  "role": "Chief Engineer",
+  "title": "Bridge Communication Decoupling",
+  "summary": "Established src/services/MCPClient as the single source of truth for SSE/JSON-RPC communication.",
+  "key_findings": ["Direct imports from extension.ts caused circular dependency failures in scripts and core logic."],
+  "conclusions": ["All mission commands MUST import getMCPClient from the services domain, not the entry point."],
+  "recommendations": ["Use absolute path aliases (@services) once the Phase 2 monorepo merge is complete."],
+  "tags": ["services","decoupling","mcp-bridge"],
+  "category": "architecture",
+  "timestamp": "2026-05-12T21:47:54.000Z"
+}

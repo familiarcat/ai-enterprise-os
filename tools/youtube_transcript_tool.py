@@ -1,34 +1,64 @@
 import sys
 import json
-from youtube_transcript_api import YouTubeTranscriptApi
+import re
+from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound, VideoUnavailable
 
-def get_transcript(video_id):
+def extract_video_id(url):
+    """
+    Extracts video ID from standard, shortened, shorts, and embed URLs.
+    """
+    patterns = [
+        r'(?:v=|\/)([0-9A-Za-z_-]{11}).*',
+        r'youtu\.be\/([0-9A-Za-z_-]{11})',
+        r'embed\/([0-9A-Za-z_-]{11})',
+        r'shorts\/([0-9A-Za-z_-]{11})'
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return None
+
+def get_transcript(video_id, languages=['en', 'en-US']):
     try:
-        # Fetches the transcript (prefers English)
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
+        # Fetches the transcript with language fallback
+        transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=languages)
         full_text = " ".join([item['text'] for item in transcript_list])
         return {"success": True, "transcript": full_text}
+    except TranscriptsDisabled:
+        return {"success": False, "error": "Transcripts are disabled for this video."}
+    except NoTranscriptFound:
+        return {"success": False, "error": f"No English or auto-generated transcript found for video {video_id}."}
+    except VideoUnavailable:
+        return {"success": False, "error": "The video is private or has been removed."}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
 if __name__ == "__main__":
-    # Read JSON from stdin to stay consistent with the Orchestrator's spawn pattern
     try:
         input_data = sys.stdin.read()
         if not input_data:
-            print(json.dumps({"error": "No input provided"}))
+            print(json.dumps({"success": False, "error": "No input provided"}))
             sys.exit(1)
             
         args = json.loads(input_data)
         url = args.get("url", "")
+        languages = args.get("languages", ['en', 'en-US'])
         
-        # Extract Video ID from URL
-        if "v=" in url:
-            video_id = url.split("v=")[1].split("&")[0]
-        else:
-            video_id = url.split("/")[-1]
+        if not url:
+            print(json.dumps({"success": False, "error": "URL parameter is missing"}))
+            sys.exit(1)
+        
+        video_id = extract_video_id(url)
+        if not video_id and len(url) == 11:
+            # Handle raw IDs
+            video_id = url
             
-        result = get_transcript(video_id)
+        if not video_id:
+            print(json.dumps({"success": False, "error": "Could not parse YouTube Video ID from URL."}))
+            sys.exit(1)
+
+        result = get_transcript(video_id, languages=languages)
         print(json.dumps(result))
     except Exception as e:
         print(json.dumps({"error": str(e)}))

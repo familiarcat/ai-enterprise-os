@@ -132,8 +132,11 @@ app.get('/api/billing/usage', async (req, res) => {
 // ── GET /sse — establish an SSE connection and bind a new MCP Server ──────────
 app.get('/sse', async (req, res) => {
   const apiKey = req.headers['x-api-key'] || req.query.apiKey;
-  if (process.env.MCP_BRIDGE_API_KEY && apiKey !== process.env.MCP_BRIDGE_API_KEY) {
-    return res.status(401).json({ error: 'Unauthorised: invalid api key' });
+  const requiredKey = process.env.MCP_BRIDGE_API_KEY;
+
+  if (requiredKey && apiKey !== requiredKey) {
+    console.warn(`[MCP Bridge] 🛡️  Blocked unauthorized SSE attempt from ${req.ip}`);
+    return res.status(401).json({ error: 'Unauthorized: Valid MCP_BRIDGE_API_KEY is required' });
   }
 
   const server = createMCPServer();

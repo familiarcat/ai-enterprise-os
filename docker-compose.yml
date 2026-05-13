@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  sovereign-redis:
+    image: redis:alpine
+    container_name: sovereign-redis
+    ports:
+      - "6379:6379"
+    restart: always
+    networks:
+      - sovereign-net
+
+  mcp-bridge:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: mcp-bridge
+    ports:
+      - "3002:3002"
+    restart: always
+    env_file: .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - sovereign-net
+
+networks:
+  sovereign-net:
+    driver: bridge

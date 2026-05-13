@@ -4,6 +4,7 @@ require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 const { Server } = require("@modelcontextprotocol/sdk/server/index.js");
 const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js");
 const { CallToolRequestSchema, ListToolsRequestSchema } = require("@modelcontextprotocol/sdk/types.js");
+const { spawnSync } = require('child_process');
 const { 
   invokeUnzipSearchTool, runMission, runMissions, getVersionsHierarchy, 
   manageProject, manageSprint, manageTask, invokeCrewAgent, gitOperation,
@@ -19,6 +20,31 @@ const server = new Server({
     logging: {},
   },
 });
+
+/**
+ * SELF-HEALING WATCHDOG
+ * Periodically verifies the health of the crew_manager (Python environment).
+ * If the crew sub-system is unreachable, the server exits to trigger a restart.
+ */
+async function performSelfHealingCheck() {
+  const healthScript = path.resolve(__dirname, 'verify_health.sh');
+  
+  try {
+    const check = spawnSync('zsh', [healthScript]);
+    
+    if (check.status !== 0) {
+      console.error(`[WATCHDOG] Critical health check failed (Exit: ${check.status}).`);
+      console.error(`[WATCHDOG] Output: ${check.stdout.toString() || check.stderr.toString()}`);
+      console.error("[WATCHDOG] Initiating self-healing restart...");
+      process.exit(1); // Exit to trigger container/PM2 restart
+    }
+  } catch (error) {
+    console.error("[WATCHDOG] Failed to execute health check:", error.message);
+  }
+}
+
+// Run health check every 60 seconds after a 10-second warm-up
+const HEALTH_CHECK_INTERVAL = 60000;
 
 /**
  * List available tools for the MCP Agent
@@ -203,8 +229,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   } else if (name === "git_operation") {
     result = await gitOperation(args.project, args.action, args.message);
   } else if (name === "health_check") {
-    const { spawnSync } = require('child_process');
-    const scriptArgs = [path.resolve(__dirname, '../../scripts/verify_health.sh')];
+    const scriptArgs = [path.resolve(__dirname, 'verify_health.sh')];
     if (args.fix) scriptArgs.push('--fix');
 
     const check = spawnSync('zsh', scriptArgs);
@@ -223,6 +248,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  
+  // Start the health watchdog loop
+  setTimeout(() => {
+    console.error("[WATCHDOG] Monitoring Crew Manager health...");
+    setInterval(performSelfHealingCheck, HEALTH_CHECK_INTERVAL);
+  }, 10000);
 }
 
 main().catch((error) => {

@@ -12,7 +12,7 @@ ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 source "$ROOT/scripts/lib/crew-fail.sh"
 source "$ROOT/scripts/lib/crew-utils.sh"
 
-ZSHRC="/Users/bradygeorgen/.zshrc"
+ZSHRC="${HOME}/.zshrc"
 ENV_FILE="$ROOT/.env"
 STEP="p0-s0-supabase-config"
 step_header "PHASE 0" "Supabase Configuration Automation"

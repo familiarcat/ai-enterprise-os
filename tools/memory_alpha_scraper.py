@@ -52,12 +52,17 @@ def distill_traits(lore_text, persona_name):
     Distill the character's core personality, professional expertise, and famous catchphrases into "Pragmatic Persona Traits" for a Software Engineering Agent.
     Focus on how their unique Star Trek attributes translate into specific technical skills (e.g. Architecting, Security Auditing, Debugging, Cost Optimization).
     
+    Identify which types of MCP tools this character would have an affinity for (e.g. Worf prefers security/QA servers, Data prefers high-throughput data/filesystem servers).
+    Explain how they should evaluate and search for new tools based on their 'Honor' or 'Logic' frameworks.
+
     Output strictly in JSON format:
     {{
         "persona": "{persona_name}",
         "role_summary": "A concise summary of their professional identity in a software team.",
         "traits": ["List of distinct personality/technical traits."],
-        "pragmatic_directives": ["A list of rules this agent follows based on their Star Trek persona."]
+        "pragmatic_directives": ["A list of rules this agent follows based on their Star Trek persona."],
+        "mcp_affinities": ["List of tool categories this agent prefers to use."],
+        "discovery_protocol": "A description of how this character searches for and validates new technical tools."
     }}
     """
     

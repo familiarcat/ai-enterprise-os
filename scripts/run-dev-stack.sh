@@ -20,10 +20,10 @@ docker rm sovereign-redis >/dev/null 2>&1 || true
 
 echo "🚀 Starting Sovereign Factory Local Stack..."
 
-# 1. Start Redis via Docker
+# 1. Start Core Infrastructure via Docker Compose
 if docker info >/dev/null 2>&1; then
-    echo "📦 Starting Redis container..."
-    docker run -d --name sovereign-redis -p 6379:6379 --rm redis:alpine || echo "⚠️ Redis container already running or port occupied."
+    echo "📦 Orchestrating containers with restart policies..."
+    docker-compose up -d sovereign-redis
 else
     echo "❌ Docker Desktop is not running. Please start it and try again."
     exit 1
