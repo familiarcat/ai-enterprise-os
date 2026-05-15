@@ -1,0 +1,30 @@
+{
+  "type": "observation",
+  "crew_member": "Commander Data",
+  "role": "Architect",
+  "title": "Language Consistency Deliberation (TS vs Python)",
+  "summary": "Audit of the Python layer against LangGraph.js/LangChain.js equivalents.",
+  "key_findings": [
+    "Data: LangChain.js is mature, but CrewAI's specific delegation logic is superior in Python.",
+    "Geordi: Dual-runtime Docker images are a maintenance burden but provide maximum capability.",
+    "Worf: Security is improved by unifying dependencies, but Python's data processing is 'honorable'.",
+    "Quark: Total refactor ROI is negative due to high implementation cost vs. existing working logic."
+  ],
+  "conclusions": [
+    "Retain Python for core Agentic Orchestration (CrewAI).",
+    "Port non-AI tools (Scrapers, File search) to TypeScript package shared by core and apps.",
+    "Maintain the MCP Bridge as the language-agnostic interface."
+  ],
+  "technical_debt_identified": [
+    "setup-python.sh requires constant pinning of fast-moving AI libraries.",
+    "Dockerfile image size is currently optimized for Node, not dual-runtimes."
+  ],
+  "timestamp": "2026-05-13T14:30:00.000Z",
+  "tags": [
+    "architecture",
+    "decisions",
+    "typescript",
+    "python",
+    "roi"
+  ]
+}

@@ -1073,7 +1073,7 @@ async function handleToolCall(name, args, { notify = () => {} } = {}) {
 
     case 'run_factory_mission': {
       const context = args.context || args; // Support both flat and wrapped args
-      const projectId = context.metadata?.project || process.env.ACTIVE_PROJECT_ID;
+      const projectId = context.project || context.metadata?.project || process.env.ACTIVE_PROJECT_ID;
       const projectMeta = await resolveProjectMetadata(projectId);
       const personaKey = normalisePersonaKey(context.persona);
       const personaConfig = CREW_PERSONAS[personaKey];
@@ -1082,6 +1082,7 @@ async function handleToolCall(name, args, { notify = () => {} } = {}) {
         persona: personaKey,
         metadata: {
           ...projectMeta,
+          project: projectId,
           ...context.metadata,
           modelTier: context.metadata?.modelTier || personaConfig?.model
         }
@@ -1169,6 +1170,12 @@ async function handleToolCall(name, args, { notify = () => {} } = {}) {
 
     case 'gitmcp_search':
       return await gitmcpSearch(args.query);
+
+    case 'youtube_transcript':
+      return await invokeYoutubeTranscriptTool(args.url);
+
+    case 'memory_alpha':
+      return await handleToolCall("memory_alpha", args); // Placeholder for future scraper logic
 
     case 'ingest_youtube_deep': {
       const { url, project } = args;

@@ -1,0 +1,24 @@
+{
+  "type": "observation",
+  "crew_member": "Captain Picard",
+  "role": "Strategic Lead",
+  "title": "Unified Tool Discovery Consensus",
+  "summary": "Consensus reached to treat local Python tools and remote MCP tools as a single Tactical Library.",
+  "key_findings": [
+    "Local tools are prioritized for internal diagnostics (Geordi/Data).",
+    "External registries (Smithery) are used for dynamic scaling of agent capabilities.",
+    "Worf mandates vetting for all dynamically discovered server.json schemas."
+  ],
+  "conclusions": [
+    "Expose all Python scripts in apps/api/mcp-server.js as standard MCP tools.",
+    "Agents are instructed to search registries if local tools fail to meet mission goals.",
+    "The 'MCP Envelope' now contains both verified local and verified remote endpoints."
+  ],
+  "timestamp": "2026-05-14T10:00:00.000Z",
+  "tags": [
+    "mcp",
+    "discovery",
+    "unification",
+    "strategy"
+  ]
+}

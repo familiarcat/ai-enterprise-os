@@ -29,6 +29,7 @@ import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import express from 'express';
 import cors from 'cors';
+import { spawnSync } from 'child_process';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -45,6 +46,27 @@ const {
 } = require('../../core/orchestrator.js');
 const { TOOL_DEFINITIONS } = require('../../core/tools.js');
 
+/**
+ * SELF-HEALING WATCHDOG
+ * Periodically verifies the health of the crew_manager (Python environment).
+ */
+async function performSelfHealingCheck() {
+  const healthScript = resolve(__dirname, '../../scripts/verify_health.sh');
+  try {
+    const check = spawnSync('zsh', [healthScript]);
+    if (check.status !== 0) {
+      console.error(`[WATCHDOG] Critical health check failed (Exit: ${check.status}).`);
+      console.error("[WATCHDOG] Initiating self-healing restart...");
+      process.exit(1); // Exit to trigger container restart
+    }
+  } catch (error) {
+    console.error("[WATCHDOG] Failed to execute health check:", error.message);
+  }
+}
+
+// Run health check every 60 seconds after a 10-second warm-up
+const HEALTH_CHECK_INTERVAL = 60000;
+
 // ── MCP Server factory ────────────────────────────────────────────────────────
 function createMCPServer() {
   const server = new Server(
@@ -58,6 +80,23 @@ function createMCPServer() {
   // ── Execute tools ───────────────────────────────────────────────────────
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
+
+    // ── Security & Configuration Guards ─────────────────────────────────────
+    const LLM_TOOLS = ["run_factory_mission", "run_batch_missions", "run_crew_agent", "search_code"];
+    if (LLM_TOOLS.includes(name) && !process.env.OPENROUTER_API_KEY) {
+      return {
+        isError: true,
+        content: [{ type: 'text', text: 'Error: OPENROUTER_API_KEY is not set on the MCP server.' }]
+      };
+    }
+
+    if (name === "deploy_production" && (!process.env.GITHUB_TOKEN || !process.env.GITHUB_REPO)) {
+      return {
+        isError: true,
+        content: [{ type: 'text', text: 'Error: GITHUB_TOKEN or GITHUB_REPO variables are missing. Deployment aborted.' }]
+      };
+    }
+
     console.log(`[MCP Bridge] 🛠️  Executing tool: ${name}`);
 
     try {
@@ -96,13 +135,22 @@ app.use('/messages', express.raw({ type: '*/*', limit: '4mb' }));
 app.use(express.json());
 
 // ── GET /health — quick liveness probe (used by dev-local.sh + Docker) ───────
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+  const healthScript = resolve(__dirname, '../../scripts/verify_health.sh');
+  const check = spawnSync('zsh', [healthScript]);
+  const isHealthy = check.status === 0;
+
+  if (!isHealthy) {
+    console.error(`[MCP Bridge] ⚠️  Python Health degraded: ${check.stdout.toString()}`);
+  }
+
   res.json({
-    status: 'ok',
+    status: isHealthy ? 'ok' : 'degraded',
     service: 'mcp-http-bridge',
     version: '1.0.0',
     sessions: transports.size,
     timestamp: new Date().toISOString(),
+    python_integrity: isHealthy ? 'healthy' : 'error'
   });
 });
 
@@ -196,6 +244,13 @@ app.listen(PORT, () => {
   console.log(`   Message POST : POST http://localhost:${PORT}/messages?sessionId=<id>`);
   console.log(`   Health       : GET  http://localhost:${PORT}/health`);
   console.log(`   Crew personas: GET  http://localhost:${PORT}/crew/personas`);
+
+  // Start the health watchdog loop
+  setTimeout(() => {
+    console.error("[WATCHDOG] Monitoring Crew Manager health...");
+    setInterval(performSelfHealingCheck, HEALTH_CHECK_INTERVAL);
+  }, 10000);
+
   console.log(`\n   Active crew model routing:`);
   Object.entries(CREW_PERSONAS).forEach(([k, v]) => {
     console.log(`     ${k.padEnd(20)} → ${v.model}`);
