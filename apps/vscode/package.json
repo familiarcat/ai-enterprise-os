@@ -1,123 +1,15 @@
 {
   "name": "sovereign-factory-vscode",
   "displayName": "Sovereign Factory",
-  "description": "AI Enterprise OS — Star Trek crew agents in your editor",
-  "version": "0.1.0",
-  "type": "module",
+  "description": "VSCode Extension for the AI Enterprise OS",
+  "version": "0.0.1",
   "publisher": "familiarcat",
   "engines": {
     "vscode": "^1.85.0"
   },
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/familiarcat/ai-enterprise-os.git"
-  },
-  "bugs": {
-    "url": "https://github.com/familiarcat/ai-enterprise-os/issues"
-  },
-  "homepage": "https://github.com/familiarcat/ai-enterprise-os#readme",
-  "keywords": [
-    "mcp",
-    "ai",
-    "agent",
-    "crewai",
-    "star trek",
-    "automation"
-  ],
-  "categories": [
-    "AI",
-    "Other"
-  ],
-  "activationEvents": [
-    "onStartupFinished"
-  ],
-  "main": "./out/src/extension.js",
-  "contributes": {
-    "commands": [
-      {
-        "command": "sovereign.runMission",
-        "title": "Sovereign: Run Factory Mission"
-      },
-      {
-        "command": "sovereign.sensorSweep",
-        "title": "Sovereign: Sensor Sweep"
-      },
-      {
-        "command": "sovereign.healthCheck",
-        "title": "Sovereign: Health Check"
-      },
-      {
-        "command": "sovereign.checkBridgeStatus",
-        "title": "Sovereign: Check Bridge Status"
-      },
-      {
-        "command": "sovereign.openAgentViewport",
-        "title": "Sovereign: Open Agent Viewport"
-      }
-    ],
-    "configuration": {
-      "title": "Sovereign Factory",
-      "properties": {
-        "sovereign.mcpBridgeUrl": {
-          "type": "string",
-          "default": "http://localhost:3002",
-          "description": "The URL of the Sovereign Factory MCP HTTP Bridge."
-        }
-      }
-    },
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "sovereign-explorer",
-          "title": "Sovereign Factory",
-          "icon": "$(hubot)"
-        }
-      ]
-    },
-    "views": {
-      "sovereign-explorer": [
-        {
-          "type": "webview",
-          "id": "sovereign.agentViewport",
-          "name": "Agent Viewport"
-        }
-      ]
-    }
-  },
+  "main": "./out/extension.js",
   "scripts": {
-    "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "build": "webpack --mode production",
-    "dev": "concurrently \"pnpm run watch\" \"webpack --mode development --watch\"",
-    "package": "vsce package"
-  },
-  "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
-    "@types/vscode": "^1.85.0",
-    "@vscode/vsce": "^2.24.0",
-    "@babel/core": "^7.24.0",
-    "@babel/preset-env": "^7.24.0",
-    "concurrently": "^8.2.2",
-    "@babel/preset-react": "^7.24.0",
-    "@babel/preset-typescript": "^7.24.0",
-    "autoprefixer": "^10.4.18",
-    "babel-loader": "^9.1.3",
-    "css-loader": "^6.10.0",
-    "html-webpack-plugin": "^5.6.0",
-    "mini-css-extract-plugin": "^2.8.1",
-    "postcss-loader": "^8.1.1",
-    "style-loader": "^3.3.4",
-    "tailwindcss": "^3.4.1",
-    "typescript": "^5.3.0",
-    "webpack": "^5.90.3",
-    "webpack-cli": "^5.1.4"
-  },
-  "dependencies": {
-    "recharts": "^3.8.1",
-    "lucide-react": "^0.475.0"
+    "build": "webpack --mode production"
   }
 }

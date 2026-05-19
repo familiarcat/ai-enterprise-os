@@ -3,8 +3,8 @@
 # scripts/setup-python.sh — Initialize Sovereign Python Environment
 # ═══════════════════════════════════════════════════════════════════════════════
 set -euo pipefail
-
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT"
 REQ_FILE="$ROOT/requirements.txt"
 

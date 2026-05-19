@@ -7,6 +7,7 @@ interface DocModalProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
+  content?: string;
   children?: React.ReactNode;
 }
 
@@ -14,7 +15,13 @@ interface DocModalProps {
  * DocModal: A tactical overlay for displaying architectural documentation 
  * and mission logs. Styled for the Sovereign Factory.
  */
-export const DocModal: React.FC<DocModalProps> = ({ isOpen, onClose, title, children }) => {
+export const DocModal: React.FC<DocModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  title, 
+  content, 
+  children 
+}) => {
   if (!isOpen) return null;
 
   return (
@@ -41,7 +48,7 @@ export const DocModal: React.FC<DocModalProps> = ({ isOpen, onClose, title, chil
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-8 text-slate-300 font-mono text-sm leading-relaxed">
-          {children}
+          {content || children}
         </div>
 
         {/* Footer */}

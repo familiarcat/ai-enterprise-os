@@ -86,7 +86,11 @@ export class MCPClient {
             throw new Error(`Bridge Error (${response.status}): ${errorText}`);
         }
 
-        return await response.json();
+        const data = await response.json();
+        if (data.error) {
+            throw new Error(`Bridge JSON-RPC Error: ${data.error.message || JSON.stringify(data.error)}`);
+        }
+        return data.result;
     }
 
     public dispose() {

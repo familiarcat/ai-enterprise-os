@@ -17,10 +17,12 @@ RUN npm install -g pnpm
 
 # Copy workspace configuration and install Node dependencies
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/api/package.json ./apps/api/
-COPY apps/dashboard/package.json ./apps/dashboard/
-COPY core/package.json ./core/
-RUN pnpm install --frozen-lockfile
+COPY apps/api ./apps/api
+COPY apps/dashboard ./apps/dashboard
+COPY apps/vscode ./apps/vscode
+COPY core ./core
+COPY packages/shared ./packages/shared
+RUN pnpm install
 
 # Copy the rest of the application
 COPY . .

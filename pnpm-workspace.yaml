@@ -2,6 +2,7 @@ packages:
   - 'apps/*'
   - 'apps/vscode/webview'
   - 'domains/*'
+  - 'packages/*'
   - 'core'
 
 shared-workspace-lockfile: true

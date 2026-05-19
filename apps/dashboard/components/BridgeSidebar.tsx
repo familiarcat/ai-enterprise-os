@@ -9,6 +9,8 @@ interface BridgeSidebarProps {
   onTabChange: (tab: DashboardTab) => void;
   currentProject?: string;
   currentObjective?: string;
+  currentSprintStatus?: string;
+  onGoToActiveTask?: () => void;
 }
 
 /**
@@ -16,7 +18,7 @@ interface BridgeSidebarProps {
  * Persistent navigation sidebar for global system access.
  */
 export const BridgeSidebar: React.FC<BridgeSidebarProps> = ({ 
-  activeTab, onTabChange, currentProject, currentObjective 
+  activeTab, onTabChange, currentProject, currentObjective, currentSprintStatus, onGoToActiveTask
 }) => {
   const [isSprintOpen, setIsSprintOpen] = useState(true);
 
@@ -57,7 +59,10 @@ export const BridgeSidebar: React.FC<BridgeSidebarProps> = ({
       {currentProject && (
         <div className="border-t-2 border-white/10 px-6 py-4 bg-zinc-900/30">
           <button 
-            onClick={() => setIsSprintOpen(!isSprintOpen)}
+            onClick={() => {
+              setIsSprintOpen(!isSprintOpen);
+              onGoToActiveTask?.();
+            }}
             className="w-full flex items-center justify-between group"
           >
             <span className="text-xs font-black text-red-600 uppercase tracking-[0.2em]">01 / Active Sprint</span>
@@ -69,6 +74,10 @@ export const BridgeSidebar: React.FC<BridgeSidebarProps> = ({
               <div>
                 <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1">Project</div>
                 <div className="text-sm font-black text-white uppercase truncate">{currentProject}</div>
+              </div>
+              <div>
+                <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1">Status</div>
+                <div className="text-sm font-black text-[#00ffaa] uppercase">{currentSprintStatus || 'Idle'}</div>
               </div>
               {currentObjective && (
                 <div>
