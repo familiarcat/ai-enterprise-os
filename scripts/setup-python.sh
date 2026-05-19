@@ -6,23 +6,37 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+REQ_FILE="$ROOT/requirements.txt"
 
 echo "🐍 Setting up Python environment..."
 
-if ! command -v python3 &> /dev/null; then
-    echo "❌ python3 not found. Please install Python 3."
+if command -v python3.11 &> /dev/null; then
+    PYTHON_CMD="python3.11"
+elif command -v python3 &> /dev/null; then
+    PYTHON_CMD="python3"
+else
+    echo "❌ Python not found. Please install Python 3.11 (brew install python@3.11)."
     exit 1
 fi
+
+echo "🔍 Using: $($PYTHON_CMD --version)"
 
 # Create .venv if it doesn't exist
 if [ ! -d ".venv" ]; then
     echo "📦 Creating virtual environment in .venv..."
-    python3 -m venv .venv
+    $PYTHON_CMD -m venv .venv
 fi
 
 # Use the venv's python to install dependencies
-echo "📥 Installing dependencies (langchain-openai, crewai, pydantic)..."
+echo "📥 Upgrading pip..."
 ./.venv/bin/python3 -m pip install --upgrade pip
-./.venv/bin/python3 -m pip install langchain-openai crewai pydantic
+
+if [ -f "$REQ_FILE" ]; then
+    echo "📥 Installing dependencies from $REQ_FILE..."
+    ./.venv/bin/python3 -m pip install -r "$REQ_FILE"
+else
+    echo "📥 Installing core Python dependencies (fallback - will be decommissioned)..."
+    ./.venv/bin/python3 -m pip install crewai pydantic langchain-openai
+fi
 
 echo "✅ Python environment ready."

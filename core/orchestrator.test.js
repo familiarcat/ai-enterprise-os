@@ -27,6 +27,8 @@ const { mockSupabase, mockRedis, mockSpawn } = vi.hoisted(() => ({
             response = '--- Found ---\nMocked Setup Documentation Content';
           } else if (args.function_name === 'init') {
             response = '--- Found ---\nMocked init script content';
+          } else if (args.objective?.includes('scaffold')) {
+            response = 'Domain: model.js\nApplication: service.js\nInfrastructure: repo.js\nUI: component.tsx';
           }
           
           if (onData) onData(Buffer.from(response));
@@ -69,10 +71,17 @@ vi.mock('child_process', () => ({
 // 3. Import logic AFTER mocks are established to prevent leakage.
 import * as orchestrator from './orchestrator';
 import fs from 'fs';
+import { unzipSearchTool } from './tools/unzip-search';
+import { YouTubeTranscriptService } from './tools/YouTubeTranscriptService.ts';
 
 // Mock the new unzipSearchTool directly
 vi.mock('./tools/unzip-search', () => ({
   unzipSearchTool: vi.fn().mockResolvedValue('--- Found in mock ---\nMocked JS Search Result')
+}));
+
+// Mock YouTubeTranscriptService
+vi.mock('./tools/YouTubeTranscriptService.ts', () => ({
+  YouTubeTranscriptService: { getTranscript: vi.fn() }
 }));
 
 describe('Orchestrator Mission Logic', () => {
@@ -250,5 +259,127 @@ describe('Self-Correction Loop', () => {
       const memory = "No relevant past memory found in Supabase.";
       const result = await orchestrator.auditPastMissions('obj', history, memory);
       expect(result).toBe("No specific QA suggestions based on history.");
+    });
+  });
+  describe('Honor Guard Security Suite', () => {
+    it('should detect and block native agent responses containing OpenRouter keys', async () => {
+      process.env.USE_NATIVE_TS_AGENTS = 'true';
+      process.env.OPENROUTER_API_KEY = 'test-key';
+      const secretKey = 'sk-or-v1-' + 'a'.repeat(48);
+      
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          choices: [{ message: { content: `Critical Error: Authorization header required for ${secretKey}` } }]
+        })
+      }));
+
+      await expect(orchestrator.invokeNativeTsAgent({
+        persona: 'commander_data',
+        objective: 'Test secret detection'
+      })).rejects.toThrow(/DISHONOURABLE leakage detected: OpenRouter\/OpenAI Key/);
+    });
+
+    it('should detect and block native agent responses containing generic secrets', async () => {
+      process.env.USE_NATIVE_TS_AGENTS = 'true';
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          choices: [{ message: { content: 'Config updated: secret="master_password_over_12_chars"' } }]
+        })
+      }));
+
+      await expect(orchestrator.invokeNativeTsAgent({
+        persona: 'geordi_la_forge',
+        objective: 'Test generic secret detection'
+      })).rejects.toThrow(/DISHONOURABLE leakage detected: Generic Secret/);
+    });
+
+    it('should detect and block Python agent responses containing secrets (parity check)', async () => {
+      process.env.USE_NATIVE_TS_AGENTS = 'false';
+      const secretKey = 'sk-or-v1-' + 'a'.repeat(48);
+      
+      mockSpawn.mockReturnValueOnce({
+        stdin: { write: vi.fn(), end: vi.fn() },
+        stdout: { on: vi.fn((event, cb) => { if (event === 'data') cb(Buffer.from(`Error: ${secretKey}`)); }) },
+        stderr: { on: vi.fn() },
+        on: vi.fn((event, cb) => { if (event === 'close') setTimeout(() => cb(0), 10); }),
+        kill: vi.fn()
+      });
+
+      await expect(orchestrator.invokeCrewAgent({
+        persona: 'commander_data',
+        objective: 'Test Python secret detection'
+      })).rejects.toThrow(/Lt. Worf: Python agent output from commander_data rejected. DISHONOURABLE leakage detected: OpenRouter\/OpenAI Key/);
+    });
+
+    it('should detect and block UnzipSearchTool responses containing secrets (parity check)', async () => {
+      const secretKey = 'sk-or-v1-' + 'a'.repeat(48);
+      unzipSearchTool.mockResolvedValueOnce(`// Found secret: ${secretKey}`);
+
+      await expect(orchestrator.invokeUnzipSearchTool({
+        path: '/test',
+        function_name: 'testFunc'
+      })).rejects.toThrow(/Lt. Worf: UnzipSearchTool output rejected. DISHONOURABLE leakage detected: OpenRouter\/OpenAI Key/);
+    });
+
+    it('should detect and block YouTube transcript responses containing secrets (parity check)', async () => {
+      const secretKey = 'sk-or-v1-' + 'a'.repeat(48);
+      vi.mocked(YouTubeTranscriptService.getTranscript).mockResolvedValueOnce({
+        success: true,
+        transcript: `Confidential: ${secretKey}`
+      });
+
+      await expect(orchestrator.invokeYoutubeTranscriptTool('https://youtube.com/watch?v=123'))
+        .rejects.toThrow(/Lt. Worf: YouTube transcript rejected. DISHONOURABLE leakage detected: OpenRouter\/OpenAI Key/);
+    });
+  });
+
+  describe('Logic Comparison Suite (TS vs Python Parity)', () => {
+    const objective = 'Decompose a mission for a new project';
+
+    it('should produce structured JSON task lists that match the legacy Python schema', async () => {
+      process.env.USE_NATIVE_TS_AGENTS = 'true';
+      
+      const mockSchema = [
+        { persona: "commander_data", task: "Architect the solution" },
+        { persona: "geordi_la_forge", task: "Implement core logic" }
+      ];
+
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          choices: [{ message: { content: JSON.stringify(mockSchema) } }]
+        })
+      }));
+
+      const result = await orchestrator.invokeNativeTsAgent({
+        persona: 'captain_picard',
+        objective: objective
+      });
+
+      const parsed = JSON.parse(result);
+      expect(Array.isArray(parsed)).toBe(true);
+      parsed.forEach(item => {
+        expect(item).toHaveProperty('persona');
+        expect(item).toHaveProperty('task');
+      });
+    });
+
+    it('should return valid DDD component blocks consistent with Python tool output', async () => {
+      const result = await orchestrator.runMission({ 
+        sessionId: 'parity-test', 
+        task: 'scaffold ads domain' 
+      });
+
+      // Status parity
+      expect(result.status).toBe('SUCCESS');
+      
+      // Structural parity: Ensure all 4 DDD layers are represented in the consolidated output
+      const consolidatedText = result.content[0].text;
+      expect(consolidatedText).toMatch(/Domain/i);
+      expect(consolidatedText).toMatch(/Application/i);
+      expect(consolidatedText).toMatch(/Infrastructure/i);
+      expect(consolidatedText).toMatch(/UI/i);
     });
   });

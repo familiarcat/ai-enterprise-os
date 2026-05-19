@@ -22,11 +22,12 @@
  * Usage:
  *   node apps/api/mcp-http-bridge.mjs
  *   PORT=3002 node apps/api/mcp-http-bridge.mjs
- */
+ */ // Removed the Python-specific health check script reference
 
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
+import fs from 'node:fs';
 import express from 'express';
 import cors from 'cors';
 import { spawnSync } from 'child_process';
@@ -51,11 +52,12 @@ const { TOOL_DEFINITIONS } = require('../../core/tools.js');
  * Periodically verifies the health of the crew_manager (Python environment).
  */
 async function performSelfHealingCheck() {
-  const healthScript = resolve(__dirname, '../../scripts/verify_health.sh');
+  // With the Unified Language Initiative, Python health checks will be decommissioned.
+  // For now, we'll perform a basic orchestrator integrity check.
   try {
-    const check = spawnSync('zsh', [healthScript]);
-    if (check.status !== 0) {
-      console.error(`[WATCHDOG] Critical health check failed (Exit: ${check.status}).`);
+    const integrity = await handleToolCall('health_check', {});
+    if (integrity.status !== 'healthy') {
+      console.error(`[WATCHDOG] Critical orchestrator health check failed.`);
       console.error("[WATCHDOG] Initiating self-healing restart...");
       process.exit(1); // Exit to trigger container restart
     }
@@ -144,15 +146,21 @@ app.get('/health', async (req, res) => {
     console.error(`[MCP Bridge] ⚠️  Python Health degraded: ${check.stdout.toString()}`);
   }
 
-  res.json({
-    status: isHealthy ? 'ok' : 'degraded',
-    service: 'mcp-http-bridge',
-    version: '1.0.0',
-    sessions: transports.size,
-    timestamp: new Date().toISOString(),
-    python_integrity: isHealthy ? 'healthy' : 'error'
-  });
+  res.json({ status: isHealthy ? 'ok' : 'degraded', sessions: transports.size, python: isHealthy ? 'healthy' : 'error', ts: new Date().toISOString() });
 });
+
+// ── Serve Next.js Dashboard (Static Export) ──────────────────────────────────
+// Assumes apps/dashboard/next.config.js has `output: 'export'`
+// The build output will be in apps/dashboard/out
+const DASHBOARD_STATIC_PATH = resolve(__dirname, '../../apps/dashboard/out');
+if (fs.existsSync(DASHBOARD_STATIC_PATH)) {
+  console.log(`[MCP Bridge] Serving static dashboard from: ${DASHBOARD_STATIC_PATH}`);
+  app.use(express.static(DASHBOARD_STATIC_PATH));
+  // Fallback to index.html for any unmatched routes (SPA behavior)
+  app.get('*', (req, res) => res.sendFile(resolve(DASHBOARD_STATIC_PATH, 'index.html')));
+} else {
+  console.warn(`[MCP Bridge] Dashboard static build not found at ${DASHBOARD_STATIC_PATH}. Dashboard will not be served.`);
+}
 
 // ── GET /api/billing/usage — Query Supabase billing table ────────────────────
 app.get('/api/billing/usage', async (req, res) => {

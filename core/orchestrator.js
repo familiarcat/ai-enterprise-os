@@ -38,11 +38,11 @@ function getPythonBin() {
 /**
  * Internal helper to ensure the Python environment is available before execution.
  */
-function verifyPythonEnv() {
+function verifyPythonEnv(toolName = 'CrewAI') {
   const pythonBin = getPythonBin();
   const check = spawnSync(pythonBin, ['-c', 'import crewai, pydantic, langchain_openai']);
   if (check.status !== 0) {
-    console.warn(`\n${ROLES.geordi_la_forge}\n\n[ENGINEERING WARNING]: Python environment is degraded. Moving to Unified Language Initiative.`);
+    console.warn(`\n[ENGINEERING WARNING]: Python environment degraded for ${toolName}. Transitioning to Unified Language Initiative.`);
     return false;
   }
   return true;
@@ -85,13 +85,8 @@ async function resolveProjectMetadata(projectId) {
  */
 function calculateTaskComplexity(task) {
   if (!task) return 0;
-  let score = 0.2; // Base complexity
-  
-  if (task.length > 500) score += 0.3;
-  if (/\b(scaffold|refactor|architect|integrate|evolve)\b/i.test(task)) score += 0.3;
-  if (/\b(analyze|check|search|list|status)\b/i.test(task)) score -= 0.1;
-  
-  // Clamp between 0 and 1
+  const weights = { scaffold: 0.3, refactor: 0.3, analyze: -0.1, status: -0.1 };
+  const score = Object.keys(weights).reduce((acc, k) => acc + (new RegExp(`\\b${k}\\b`, 'i').test(task) ? weights[k] : 0), 0.2 + (task.length > 500 ? 0.3 : 0));
   const finalScore = Math.min(Math.max(score, 0), 1);
   console.log(`[Quark] Task complexity calculated: ${finalScore.toFixed(2)}`);
   return finalScore;
@@ -148,22 +143,31 @@ async function verifyIntegrity(fix = false) {
     report.openrouter = `error: ${err.message}`;
   }
 
-  try {
+  try { // Python environment check (will be removed with Unified Language Initiative)
     const pythonBin = getPythonBin();
-    const pythonModules = 'crewai, pydantic, langchain_openai';
+    const reqFile = path.resolve(__dirname, '../requirements.txt');
+    const pythonModules = 'crewai, pydantic, langchain_openai, youtube_transcript_api';
     const checkCmd = `import ${pythonModules}; print("ok")`;
     let check = spawnSync(pythonBin, ['-c', checkCmd]);
     
     if (check.status !== 0 && fix) {
       console.log(`[Geordi] Missing Python dependencies. Attempting automatic repair...`);
-      const repair = spawnSync(pythonBin, ['-m', 'pip', 'install', 'crewai', 'langchain-openai', 'pydantic'], { stdio: 'inherit' });
+      
+      let repairArgs = ['-m', 'pip', 'install'];
+      if (fs.existsSync(reqFile)) {
+        repairArgs.push('-r', reqFile);
+      } else {
+        repairArgs.push('crewai', 'langchain-openai', 'pydantic', 'youtube-transcript-api');
+      }
+
+      const repair = spawnSync(pythonBin, repairArgs, { stdio: 'inherit' });
       if (repair.status !== 0) {
         console.error(`[Geordi] Repair failed with status ${repair.status}. Manual intervention required.`);
       }
       check = spawnSync(pythonBin, ['-c', checkCmd]);
     }
 
-    report.python = check.status === 0 ? 'healthy' : `error: missing required modules (${pythonModules}). Run: pnpm setup:python`;
+    report.python = check.status === 0 ? 'healthy' : `error: Python environment degraded. Missing modules: ${pythonModules}. Run: pnpm setup:python`;
   } catch (err) {
     report.python = `error: ${err.message}`;
   }
@@ -206,6 +210,7 @@ const WORF_EXCLUSIONS = [
   'README.md',
   'PLATFORM_CONSTITUTION.md',
   'core/docker-compose.yml',
+  'core/orchestrator.test.js',
   'apps/vscode/media/',
   'apps/vscode/out/',
   'dist/',
@@ -219,110 +224,118 @@ const WORF_EXCLUSIONS = [
  * @param {Object} options - Tool parameters (path, function_name, item_type, etc.)
  * @returns {string} The found code block or search results.
  */
-function invokeUnzipSearchTool(options) {
-  return new Promise((resolve, reject) => {
-    try {
-      if (verifyPythonEnv() === false) {
-        return reject(new Error("Python environment degraded: missing required modules for search."));
-      }
-    } catch (err) {
-      return reject(err);
-    }
+async function invokeUnzipSearchTool(options) {
+  console.log(`[Geordi] Invoking TypeScript UnzipSearchTool for: ${options.function_name}`);
+  let result;
+  // Lazy-load to resolve refactoring path issues and prevent pre-commit hook crashes
+  const { unzipSearchTool } = require('./unzip-search');
+  try {
+    // The new TypeScript implementation directly
+    result = await unzipSearchTool(options);
+  } catch (err) {
+    throw new Error(`TypeScript UnzipSearchTool failed: ${err.message}`);
+  }
 
-    const scriptPath = path.resolve(__dirname, '../tools/unzip_search_tool.py');
-    const jsonArgs = JSON.stringify(options);
-    const pythonBin = getPythonBin();
-    const child = spawn(pythonBin, [scriptPath]);
+  // Lt. Worf's Guard: Parity check for search tool output
+  const violations = worfScanText(result);
+  if (violations.length > 0) {
+    throw new Error(`Lt. Worf: UnzipSearchTool output rejected. DISHONOURABLE leakage detected: ${violations.join(', ')}`);
+  }
 
-    // Hard timeout logic to kill the process if it hangs
-    const maxSeconds = options.max_seconds || 30;
-    const timeoutHandle = setTimeout(() => {
-      if (child.kill()) {
-        reject(new Error(`UnzipSearchTool killed by orchestrator after exceeding ${maxSeconds + 5}s limit.`));
-      }
-    }, (maxSeconds + 5) * 1000);
-
-    // Pipe the JSON arguments to stdin to avoid shell command length limits (E2BIG)
-    child.stdin.write(jsonArgs);
-    child.stdin.end();
-
-    let stdout = '';
-    let stderr = '';
-
-    child.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
-
-    child.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
-
-    child.on('close', (code) => {
-      clearTimeout(timeoutHandle);
-      if (code === 0) {
-        resolve(stdout);
-      } else {
-        reject(new Error(`UnzipSearchTool failed with code ${code}: ${stderr}`));
-      }
-    });
-
-    child.on('error', (err) => {
-      clearTimeout(timeoutHandle);
-      reject(new Error(`Failed to start UnzipSearchTool: ${err.message}`));
-    });
-  });
+  return result;
 }
 
 /**
  * Bridge to fetch YouTube transcripts for the Analyst agent.
+ * (Will be replaced by TypeScript YouTubeTranscriptService)
  */
-function invokeYoutubeTranscriptTool(url) {
-  return new Promise((resolve, reject) => {
-    const scriptPath = path.resolve(__dirname, '../tools/youtube_transcript_tool.py');
-    const pythonBin = getPythonBin();
-    const child = spawn(pythonBin, [scriptPath]);
+async function invokeYoutubeTranscriptTool(url, { notify = () => {} } = {}) {
+  console.log(`[Uhura] Invoking native YouTubeTranscriptService for frequencies at: ${url}`);
+  let result;
+  // Lazy-load for Unified Language Initiative compatibility
+  const { YouTubeTranscriptService } = require('./YouTubeTranscriptService');
+  try {
+    result = await YouTubeTranscriptService.getTranscript(url);
+    if (!result.success) throw new Error(result.error);
 
-    child.stdin.write(JSON.stringify({ url }));
-    child.stdin.end();
+    // Check for the truncation notice appended by the service
+    if (result.transcript?.includes('[TRUNCATED')) {
+      notify(`[Uhura] Warning: Transcript for video ${url.substring(0, 30)}... was truncated to stay within bridge limits.`);
+    }
+  } catch (err) {
+    throw new Error(`TypeScript YouTubeTranscriptService failed: ${err.message}`);
+  }
 
-    let stdout = '';
-    let stderr = '';
+  // Lt. Worf's Guard: Parity check for transcript output
+  const violations = worfScanText(result.transcript);
+  if (violations.length > 0) {
+    throw new Error(`Lt. Worf: YouTube transcript rejected. DISHONOURABLE leakage detected: ${violations.join(', ')}`);
+  }
 
-    child.stdout.on('data', (data) => { stdout += data.toString(); });
-    child.stderr.on('data', (data) => { stderr += data.toString(); });
+  return result;
+}
 
-    child.on('close', (code) => {
-      if (code === 0) {
-        try {
-          const result = JSON.parse(stdout);
-          if (result.success) resolve(result);
-          else reject(new Error(result.error));
-        } catch (e) {
-          reject(new Error("Failed to parse Python output"));
-        }
-      } else {
-        reject(new Error(`Transcript tool failed: ${stderr}`));
-      }
-    });
-  });
+/**
+ * Placeholder for native TypeScript agent framework invocation.
+ * This will replace the Python-based CrewAI.
+ */
+async function invokeNativeTsAgent(options) {
+  const personaKey = normalisePersonaKey(options.persona);
+  // Lazy-load to prevent circular dependencies in the agent framework
+  const { runNativeAgent } = require('./ts-agent-framework');
+
+  console.log(`[${personaKey.toUpperCase()}] Invoking native TypeScript agent...`);
+
+  const p = CREW_PERSONAS[personaKey];
+
+  const enrichedOptions = {
+    ...options,
+    system_prompt: p ? [
+      `Canonical Personality: ${p.canonical_personality}`,
+      `Authority: ${p.authority.decision_type} (Escalation Path: ${p.authority.escalation_path || 'Direct to Bridge'})`,
+      `Expertise Areas: ${p.expertise_areas.join(', ')}`,
+      `Decision Framework: ${p.decision_framework}`,
+      `Communication Style: ${p.communication_style}`,
+      `Mission Constraints: ${p.mission_constraints.join(', ')}`
+    ].join('\n') : undefined
+  };
+
+  const result = await runNativeAgent(enrichedOptions);
+
+  // Lt. Worf's Guard: Zero-latency redaction and blocking for native LLM output
+  const violations = worfScanText(result);
+  if (violations.length > 0) {
+    throw new Error(`Lt. Worf: Native agent output from ${options.persona} rejected. DISHONOURABLE leakage detected: ${violations.join(', ')}`);
+  }
+
+  return result;
 }
 
 /**
  * Bridge to invoke a Python-based CrewAI agent.
  * Handles complex agentic workflows using the CrewAI framework.
+ * (This function will eventually be decommissioned in favor of invokeNativeTsAgent)
  * 
  * @param {Object} options - Task and agent configuration.
  * @returns {Promise<string>} The result of the Crew operation.
  */
 function invokeCrewAgent(options) {
   return new Promise((resolve, reject) => {
+    // Temporarily, we'll route to the native TS agent placeholder.
+    // Once the TS agent framework is fully implemented, this Python bridge will be removed.
+    if (process.env.USE_NATIVE_TS_AGENTS === 'true') {
+      return invokeNativeTsAgent(options).then(resolve).catch(reject);
+    }
+
+    // Fallback to Python CrewAI if native TS agents are not enabled
     try {
-      if (verifyPythonEnv() === false) {
-        return reject(new Error("Python environment degraded: missing required modules for CrewAI. Run 'health_check --fix'"));
+      if (verifyPythonEnv('CrewAI') === false) {
+        return reject(new Error("Python environment degraded for CrewAI. Run 'pnpm setup:python' or enable native TS agents."));
       }
     } catch (err) {
       return reject(err);
     }
+
 
     const personaKey = normalisePersonaKey(options.persona);
     const p = CREW_PERSONAS[personaKey];
@@ -362,7 +375,14 @@ function invokeCrewAgent(options) {
 
     child.on('close', (code) => {
       clearTimeout(timeoutHandle);
-      if (code === 0) resolve(stdout);
+      if (code === 0) {
+        const violations = worfScanText(stdout);
+        if (violations.length > 0) {
+          reject(new Error(`Lt. Worf: Python agent output from ${options.persona} rejected. DISHONOURABLE leakage detected: ${violations.join(', ')}`));
+        } else {
+          resolve(stdout);
+        }
+      }
       else reject(new Error(`CrewAgent failed: ${stderr}`));
     });
 
@@ -449,6 +469,12 @@ async function gitOperation(project, action, message) {
  */
 async function sensorSweep() {
   const projectPath = path.resolve(__dirname, '..');
+  
+  // Check if native agents are responsive
+  const nativeHealthProbe = process.env.USE_NATIVE_TS_AGENTS === 'true' 
+    ? await runNativeAgent({ persona: 'commander_data', objective: 'health_check_ping', model: MODEL_CONFIG.commander_data, system_prompt: 'Respond only with "PONG"' }).catch(e => `ERROR: ${e.message}`)
+    : 'N/A (Python Mode Active)';
+
   const [integrity, structure] = await Promise.all([
     verifyIntegrity(),
     // Get the tree structure
@@ -498,6 +524,7 @@ async function sensorSweep() {
     status: (integrity.env === 'healthy' && securityViolations.length === 0) ? 'NOMINAL' : 'DEGRADED',
     timestamp: new Date().toISOString(),
     integrity,
+    native_agent_health: nativeHealthProbe === 'PONG' ? 'healthy' : nativeHealthProbe,
     active_domains: domains,
     crew_count: crewCount,
     crew_status: crewStatus,
@@ -624,8 +651,8 @@ async function integrateMcpTool(project, query, persona = 'captain_picard', depl
   };
 
   // 2. Worf's Security Clearance
-  const isSafe = worfSecurityAudit(toolSpec);
-  if (!isSafe) {
+  const auditResult = await worfSecurityAudit(toolSpec);
+  if (!auditResult.isSafe) {
     throw new Error(`Lt. Worf: DISHONOURABLE patterns detected. Integration of "${toolSpec.name}" aborted.`);
   }
 
@@ -637,7 +664,13 @@ async function integrateMcpTool(project, query, persona = 'captain_picard', depl
   }
   
   if (!registry.find(t => t.name === toolSpec.name)) {
-    registry.push({ ...toolSpec, security_status: "VERIFIED / SECURE", integrated_by: persona, timestamp: new Date().toISOString() });
+    registry.push({ 
+      ...toolSpec, 
+      security_status: "VERIFIED / SECURE", 
+      trust_score: auditResult.score,
+      integrated_by: persona, 
+      timestamp: new Date().toISOString() 
+    });
     fs.writeFileSync(registryPath, JSON.stringify(registry, null, 2));
   }
 
@@ -672,27 +705,42 @@ async function integrateMcpTool(project, query, persona = 'captain_picard', depl
     status: 'INTEGRATED',
     tool: toolSpec.name,
     security: 'CLEARED BY WORF',
+    trust_score: auditResult.score,
     mission: missionResult.plan,
     files: missionResult.producedFiles
   };
 }
 
 /**
+ * Shared security patterns for scanning strings and files.
+ */
+const DISHONORABLE_PATTERNS = [
+  { name: 'OpenRouter/OpenAI Key', pattern: new RegExp('sk-' + 'or-v1-' + '[a-zA-Z0-9]{48}') },
+  { name: 'Anthropic Key', pattern: new RegExp('sk-' + 'ant-api03-' + '[a-zA-Z0-9-_]{93}') },
+  { name: 'Google API Key', pattern: new RegExp('AIza' + '[0-9A-Za-z' + '-_]{35}') },
+  { name: 'Supabase Key', pattern: new RegExp('SUPABASE_' + '(?:PUBLIC_|' + 'SERVICE_ROLE_)?KEY\\s*[:=]\\s*[\'"][^\'"]+[\'"]', 'i') },
+  { name: 'Supabase Anon Key', pattern: new RegExp('e' + 'yJ' + '[a-zA-Z0-9' + '._-]{50,}') },
+  { name: 'AWS Secret', pattern: new RegExp('AWS_SECRET' + '_ACCESS_KEY\\s*[:=]\\s*[\'"][^\'"]+[\'"]', 'i') },
+  { name: 'Generic Secret', pattern: new RegExp('secret' + '\\s*[:=]\\s*' + '[\'"][^\'"]{12,}[\'"]', 'i') },
+  { name: 'Database Connection String', pattern: new RegExp('[a' + '-z]{3,10}' + '[:]' + '//' + '[^' + ':\\s]{3,}' + ':' + '[^' + '@\\s]{3,}' + '@' + '[^' + '/\\s]{4,}') },
+  { name: 'Private Key', pattern: new RegExp('-----BEGIN ' + '(?:RSA |EC |)PRIVATE KEY-----') }
+];
+
+/**
+ * Scans raw text for dishonorable patterns.
+ */
+function worfScanText(text) {
+  const violations = [];
+  DISHONORABLE_PATTERNS.forEach(p => {
+    if (p.pattern.test(text)) violations.push(p.name);
+  });
+  return violations;
+}
+
+/**
  * Lt. Worf's Security Scan: Scans files for dishonorable patterns (secrets, keys).
  */
 function worfSecurityScan(files, projectPath) {
-  const dishonorablePatterns = [
-    { name: 'OpenRouter/OpenAI Key', pattern: new RegExp('sk-' + 'or-v1-' + '[a-zA-Z0-9]{48}') },
-    { name: 'Anthropic Key', pattern: new RegExp('sk-' + 'ant-api03-' + '[a-zA-Z0-9-_]{93}') },
-    { name: 'Google API Key', pattern: new RegExp('AIza' + '[0-9A-Za-z' + '-_]{35}') },
-    { name: 'Supabase Key', pattern: new RegExp('SUPABASE_' + '(?:PUBLIC_|' + 'SERVICE_ROLE_)?KEY\\s*[:=]\\s*[\'"][^\'"]+[\'"]', 'i') },
-    { name: 'Supabase Anon Key', pattern: new RegExp('e' + 'yJ' + '[a-zA-Z0-9' + '._-]{50,}') },
-    { name: 'AWS Secret', pattern: new RegExp('AWS_SECRET' + '_ACCESS_KEY\\s*[:=]\\s*[\'"][^\'"]+[\'"]', 'i') },
-    { name: 'Generic Secret', pattern: new RegExp('secret' + '\\s*[:=]\\s*' + '[\'"][^\'"]{12,}[\'"]', 'i') },
-    { name: 'Database Connection String', pattern: new RegExp('[a' + '-z]{3,10}' + '[:]' + '//' + '[^' + ':\\s]{3,}' + ':' + '[^' + '@\\s]{3,}' + '@' + '[^' + '/\\s]{4,}') },
-    { name: 'Private Key', pattern: new RegExp('-----BEGIN ' + '(?:RSA |EC |)PRIVATE KEY-----') }
-  ];
-
   const violations = [];
   const resolvedProjectPath = path.resolve(projectPath);
 
@@ -722,13 +770,12 @@ function worfSecurityScan(files, projectPath) {
         if (stats.size > 1024 * 1024) return;
 
         const content = fs.readFileSync(fullPath, 'utf-8');
-        dishonorablePatterns.forEach(p => {
-          if (p.pattern.test(content)) {
+        const textViolations = worfScanText(content);
+        textViolations.forEach(v => {
             violations.push({
               file: path.relative(projectPath, fullPath),
-              pattern: p.name
+              pattern: v
             });
-          }
         });
       } catch (e) {}
     }
@@ -769,35 +816,66 @@ async function listAvailableMCPs(sync = false) {
   const registry = JSON.parse(fs.readFileSync(registryPath, 'utf-8'));
   
   // Security Check by Lt. Worf
-  const auditedRegistry = registry.map(mcp => {
-    const isSafe = worfSecurityAudit(mcp);
+  const auditedRegistry = await Promise.all(registry.map(async (mcp) => {
+    const auditResult = await worfSecurityAudit(mcp);
     return {
       ...mcp,
-      security_status: isSafe ? "VERIFIED / SECURE" : "WARNING / DISHONOURABLE",
+      security_status: auditResult.isSafe ? "VERIFIED / SECURE" : "WARNING / DISHONOURABLE",
+      trust_score: auditResult.score,
       auditor: "Lt. Worf"
     };
-  });
+  }));
 
   return auditedRegistry;
 }
 
 /**
  * Lt. Worf's Security Audit logic for MCP libraries.
+ * Now includes dynamic schema validation from external registries.
  */
-function worfSecurityAudit(mcp) {
+async function worfSecurityAudit(mcp) {
   const untrustedSources = ['unverified-git', 'random-cdn', 'http://']; // Require HTTPS
   const suspiciousPatterns = [/eval\(/, /exec\(/, /curl/, /child_process/, /fs\.rm/];
+  let score = 50; // Base score
 
   // Check source credibility
-  if (!mcp.source.startsWith('https://')) return false;
-  if (untrustedSources.some(src => mcp.source.includes(src))) return false;
+  if (mcp.source.startsWith('https://')) score += 15;
+  if (!untrustedSources.some(src => mcp.source.includes(src))) score += 10;
   
-  // Simulate deep packet/source inspection
-  if (mcp.capabilities.some(cap => suspiciousPatterns.some(pat => pat.test(cap)))) {
-    return false;
+  // Dynamic Manifest Validation
+  try {
+    // Attempt to fetch the server.json if provided by a registry source
+    const isRegistrySource = mcp.source.includes('smithery.ai') || mcp.source.includes('gitmcp.io') || mcp.source.includes('modelcontextprotocol.io');
+    if (isRegistrySource) score += 25;
+    if (isRegistrySource) {
+      const manifestUrl = mcp.source.endsWith('.json') ? mcp.source : `${mcp.source.replace(/\/$/, '')}/server.json`;
+      const response = await fetch(manifestUrl, { signal: AbortSignal.timeout(3000) });
+      if (response.ok) {
+        const manifest = await response.json();
+        const manifestStr = JSON.stringify(manifest);
+        // Scan the entire manifest content for dishonorable code patterns
+        if (suspiciousPatterns.some(pat => pat.test(manifestStr))) {
+          console.error(`[Lt. Worf] CRITICAL: Suspicious patterns detected in manifest from ${mcp.source}`);
+          score -= 40;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn(`[Lt. Worf] Warning: Could not dynamically fetch manifest for ${mcp.name}. Proceeding with static audit.`);
   }
 
-  return true;
+  // Simulate deep packet/source inspection
+  mcp.capabilities.forEach(cap => {
+    if (suspiciousPatterns.some(pat => pat.test(cap))) {
+      score -= 30;
+    }
+  });
+
+  const finalScore = Math.min(Math.max(score, 0), 100);
+  return {
+    isSafe: finalScore >= 75,
+    score: finalScore
+  };
 }
 
 /**
@@ -1062,13 +1140,13 @@ function discernHumanNeed(agentResponse, score) {
  */
 async function handleToolCall(name, args, { notify = () => {} } = {}) {
   // Security/Config Guards
-  const LLM_TOOLS = ['run_factory_mission', 'run_batch_missions', 'run_crew_agent', 'search_code'];
+  const LLM_TOOLS = ['run_factory_mission', 'run_batch_missions', 'run_crew_agent', 'search_code', 'ingest_youtube_batch'];
   if (LLM_TOOLS.includes(name) && !process.env.OPENROUTER_API_KEY) {
     throw new Error(`OPENROUTER_API_KEY is not set. Required for tool: ${name}`);
   }
 
   switch (name) {
-    case 'search_code':
+    case 'search_code': // Now uses the TypeScript implementation
       return await invokeUnzipSearchTool(args);
 
     case 'run_factory_mission': {
@@ -1172,22 +1250,22 @@ async function handleToolCall(name, args, { notify = () => {} } = {}) {
       return await gitmcpSearch(args.query);
 
     case 'youtube_transcript':
-      return await invokeYoutubeTranscriptTool(args.url);
+      return await invokeYoutubeTranscriptTool(args.url, { notify });
 
     case 'memory_alpha':
       return await handleToolCall("memory_alpha", args); // Placeholder for future scraper logic
 
     case 'ingest_youtube_deep': {
-      const { url, project } = args;
+      const { url, project, persona } = args;
       const projectId = project || process.env.ACTIVE_PROJECT_ID;
       const projectMeta = await resolveProjectMetadata(projectId);
       
-      notify(`[Uhura] Initiating deep frequency scan for: ${url}...`);
+      const ingestPersona = persona || 'lt_uhura';
+      notify(`[${CREW_PERSONAS[ingestPersona].role}] Initiating deep frequency scan for: ${url}...`);
       
       // Use enhanced scraper logic (transcript + resources + description)
-      const deepData = await invokeYoutubeTranscriptTool(url); 
+      const deepData = await invokeYoutubeTranscriptTool(url, { notify }); 
       
-      const ingestPersona = 'lt_uhura';
       const summary = await invokeCrewAgent({
         objective: `Analyze this enriched YouTube resource within the context of the Sovereign Factory (Business-as-Code):
 ${JSON.stringify(deepData, null, 2)}
@@ -1201,7 +1279,7 @@ Hyperspecific Extraction Task:
 4. Identify external GitHub/MCP resources for the 'discover_mcp_tools' pipeline.
 5. Formulate a phased refactor theory to optimize our token usage and system speed using these concepts.`,
         persona: ingestPersona,
-        model: MODEL_CONFIG.lt_uhura
+        model: args.model || MODEL_CONFIG[ingestPersona]
       });
 
       await storeMissionResult(summary, {
@@ -1209,11 +1287,63 @@ Hyperspecific Extraction Task:
         source_url: url,
         project: projectId,
         persona: ingestPersona,
+        metadata: { ...projectMeta, ...args.metadata },
         video_id: deepData.video_id,
         complexity: calculateTaskComplexity(summary)
       });
 
       return { status: 'SUCCESS', message: 'Resource ingested into vector memory', summary };
+    }
+
+    case 'ingest_youtube_batch': {
+      const { urls, topic, project, persona } = args;
+      const projectId = project || process.env.ACTIVE_PROJECT_ID;
+      const projectMeta = await resolveProjectMetadata(projectId);
+      const ingestPersona = persona || 'lt_uhura';
+
+      notify(`[${CREW_PERSONAS[ingestPersona].role}] Initiating batch frequency scan for topic: ${topic} (${urls.length} targets)`);
+
+      const pLimit = (await import('p-limit')).default(3); // Process 3 URLs at a time
+      const ingestionTasks = urls.map(url => pLimit(async () => {
+        try {
+          const data = await invokeYoutubeTranscriptTool(url, { notify });
+          return { url, transcript: data.transcript, status: 'SUCCESS' };
+        } catch (err) {
+          return { url, error: err.message, status: 'ERROR' };
+        }
+      }));
+
+      const ingestionResults = await Promise.all(ingestionTasks);
+      const successfulIngestions = ingestionResults.filter(r => r.status === 'SUCCESS');
+
+      if (successfulIngestions.length === 0) {
+        throw new Error(`All batch ingestions failed. Details: ${JSON.stringify(ingestionResults)}`);
+      }
+
+      const sphereOfKnowledge = successfulIngestions.map(r => `[VIDEO SOURCE: ${r.url}]\n${r.transcript}`).join('\n\n---\n\n');
+
+      const synthesis = await invokeCrewAgent({
+        objective: `Synthesize a sphere of knowledge for the topic: "${topic}" based on the following YouTube video transcripts.
+Identify shared patterns, technical insights, and modular architectural "Conceptets" that apply to our platform evolution.
+
+Sphere of Knowledge:
+${sphereOfKnowledge}
+
+Project Context: ${projectMeta?.scope || 'General Architectural Evolution'}`,
+        persona: ingestPersona,
+        model: args.model || MODEL_CONFIG[ingestPersona]
+      });
+
+      await storeMissionResult(synthesis, {
+        type: 'youtube_batch_ingestion',
+        topic,
+        project: projectId,
+        persona: ingestPersona,
+        metadata: { ...projectMeta, ...args.metadata, urls: successfulIngestions.map(r => r.url) },
+        complexity: calculateTaskComplexity(synthesis)
+      });
+
+      return { status: 'SUCCESS', topic, summary: synthesis, ingested_count: successfulIngestions.length };
     }
 
     case 'discover_mcp_tools':
@@ -1226,11 +1356,61 @@ Hyperspecific Extraction Task:
     case 'generate_roi_report':
       return await generateROIReport(args.project);
 
+    case 'run_hierarchical_mission':
+      return await runHierarchicalMission({
+        objective: args.objective,
+        manager_persona: args.manager_persona || 'captain_picard',
+        crew: args.crew,
+        project_context: args.project_context,
+        model_overrides: args.model_overrides
+      });
+
+    case 'conduct_pedagogical_debate': {
+      const { topic, context, crew } = args;
+      const defaultCrew = ['commander_data', 'geordi_la_forge', 'lt_worf', 'counselor_troi', 'quark'];
+      const activeCrew = crew || defaultCrew;
+      
+      notify(`[Captain Picard] Initiating Pedagogical Observation Lounge for: ${topic}`);
+      
+      const pedagogicalObjective = `
+        Conduct a pedagogical conversation regarding the findings on: "${topic}".
+        
+        Mission Constraints:
+        1. Analyze technical patterns and philosophies from the ingestion context.
+        2. Debate integration pathways within our existing DDD and MCP architecture in ai-enterprise-os.
+        3. Construct a high-level Action Plan for autonomous system evolution.
+      `;
+      
+      return await runHierarchicalMission({
+        objective: pedagogicalObjective,
+        manager_persona: 'captain_picard',
+        crew: activeCrew,
+        project_context: context
+      });
+    }
+
     case 'crew_roll_call':
       return await conductRollCall();
 
+    case 'conduct_observation_lounge': {
+      const { context, focus } = args;
+      notify(`[Captain Picard] Convening the crew in the Observation Lounge to discuss: ${focus || 'Mission Intelligence'}`);
+      
+      const debate = await invokeCrewAgent({
+        objective: `Simulate a full-crew Observation Lounge discussion regarding the following context: 
+        "${context}"
+        
+        Focus: ${focus || 'Integration into ai-enterprise-os file structure'}.
+        
+        Each crew member (Picard, Data, Geordi, Worf, Troi, Quark) must provide a hyperspecific perspective based on their role and how this intelligence affects our local codebase.`,
+        persona: 'captain_picard',
+        model: MODEL_CONFIG.captain_picard
+      });
+      return { status: 'SUCCESS', debate };
+    }
+
     case 'deploy_production': {
-      const { domain, rationale } = args;
+      const { rationale } = args;
       const owner = process.env.GITHUB_OWNER;
       const repo = process.env.GITHUB_REPO;
       const token = process.env.GITHUB_TOKEN;
@@ -1240,7 +1420,7 @@ Hyperspecific Extraction Task:
         throw new Error("GitHub deployment credentials (GITHUB_OWNER, GITHUB_REPO, GITHUB_TOKEN) are not configured.");
       }
 
-      notify(`[Picard] Authorizing production deployment for ${domain}...`);
+      notify(`[Picard] Authorizing production deployment to EC2...`);
       
       try {
         const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowId}/dispatches`, {
@@ -1253,7 +1433,7 @@ Hyperspecific Extraction Task:
           body: JSON.stringify({
             ref: 'main',
             inputs: {
-              target_app: domain === 'civic' ? 'civic' : 'dashboard'
+              rationale: rationale
             }
           })
         });
@@ -1263,7 +1443,7 @@ Hyperspecific Extraction Task:
           throw new Error(`Workflow dispatch failed: ${response.status} - ${errorMsg}`);
         }
 
-        return { status: "DISPATCHED", message: `Production deployment for ${domain} triggered via GHA. Rationale: ${rationale}` };
+        return { status: "DISPATCHED", message: `Production deployment to EC2 triggered via GHA. Rationale: ${rationale}` };
       } catch (err) {
         throw new Error(`Deployment failed: ${err.message}`);
       }
@@ -1525,6 +1705,7 @@ Object.assign(exports, {
   getSkill,
   handleToolCall,
   CREW_PERSONAS,
+  invokeNativeTsAgent, // Export for testing/future use
   conductRollCall,
   discernHumanNeed,
   discoverMcpTools,

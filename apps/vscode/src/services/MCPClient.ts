@@ -2,115 +2,98 @@ import * as vscode from 'vscode';
 import EventSource from 'eventsource';
 
 /**
- * MCPClient: The primary agent bus for the VSCode Extension.
- * Connects to the Sovereign Bridge via SSE and dispatches tool calls.
+ * MCPClient
+ * Handles Server-Sent Events (SSE) communication with the Sovereign Bridge.
  */
 export class MCPClient {
-    private _eventSource: EventSource | undefined;
-    private _sessionId: string | undefined;
-    private _bridgeUrl: string;
-    private _onProgress = new vscode.EventEmitter<string>();
-    private _onDisconnect = new vscode.EventEmitter<void>();
-    private _responseResolvers = new Map<number | string, (res: any) => void>();
+    public isConnected: boolean = false;
+    public sessionId: string | null = null;
+    public outputChannel: vscode.OutputChannel;
+    private eventSource: EventSource | null = null;
+    private baseUrl: string;
 
-    public readonly onProgress = this._onProgress.event;
-    public readonly onDisconnect = this._onDisconnect.event;
-    public readonly outputChannel: vscode.OutputChannel;
-
-    constructor() {
-        const config = vscode.workspace.getConfiguration('sovereign');
-        this._bridgeUrl = config.get<string>('bridgeUrl') || 'http://localhost:3002';
-        this.outputChannel = vscode.window.createOutputChannel('Sovereign Bridge');
+    constructor(outputChannel: vscode.OutputChannel, baseUrl: string = 'http://localhost:3002') {
+        this.outputChannel = outputChannel;
+        this.baseUrl = baseUrl;
     }
 
+    /**
+     * Establishes a session with the MCP Bridge.
+     */
     public async connect(): Promise<void> {
+        if (this.eventSource) {
+            this.eventSource.close();
+        }
+
+        this.outputChannel.appendLine(`[MCP] Establishing bridge connection: ${this.baseUrl}/sse`);
+        
         return new Promise((resolve, reject) => {
-            const eventSource = new EventSource(`${this._bridgeUrl}/sse`);
-            this._eventSource = eventSource;
+            try {
+                const es = new EventSource(`${this.baseUrl}/sse`);
+                this.eventSource = es;
 
-            eventSource.onmessage = (event: any) => {
-                const data = event.data;
-                // Extract sessionId from endpoint URL: data: /messages?sessionId=...
-                const urlMatch = data.match(/sessionId=([^&]+)/);
-                if (urlMatch && !this._sessionId) {
-                    this._sessionId = urlMatch[1];
-                    console.log(`[MCP Client] Connected. Session: ${this._sessionId}`);
+                es.onopen = () => {
+                    this.isConnected = true;
+                    this.outputChannel.appendLine('[MCP] Bridge connection established.');
                     resolve();
-                }
-                
-                // Handle JSON-RPC notifications and progress
-                try {
-                    const parsed = JSON.parse(data);
-                    // Handle JSON-RPC tool results
-                    if (parsed.id && this._responseResolvers.has(parsed.id)) {
-                        const resolve = this._responseResolvers.get(parsed.id);
-                        this._responseResolvers.delete(parsed.id);
-                        resolve?.(parsed.result || parsed);
-                    }
-                    // Handle progress notifications
-                    if (parsed.method === 'notifications/message') {
-                        this._onProgress.fire(parsed.params.data);
-                    }
-                } catch (e) {}
-            };
+                };
 
-            eventSource.onerror = (err: any) => {
-                console.error(`[MCP Client] SSE Error: ${err}`);
-                this._onDisconnect.fire();
-                if (!this._sessionId) {
-                    reject(new Error(`SSE Connection failed: ${err}`));
-                }
-            };
+                es.onmessage = (event: any) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.sessionId) {
+                            this.sessionId = data.sessionId;
+                            this.outputChannel.appendLine(`[MCP] Session ID assigned: ${this.sessionId}`);
+                        }
+                    } catch (err) {
+                        this.outputChannel.appendLine(`[MCP] Warning: Received malformed message: ${event.data}`);
+                    }
+                };
+
+                es.onerror = (err: any) => {
+                    this.isConnected = false;
+                    this.outputChannel.appendLine(`[MCP] Bridge error: ${JSON.stringify(err)}`);
+                    reject(err);
+                };
+            } catch (err) {
+                reject(err);
+            }
         });
     }
 
-    public async callTool(name: string, args: any): Promise<any> {
-        if (!this._sessionId) throw new Error('MCP Client not connected.');
+    /**
+     * Dispatches a tool call to the bridge via JSON-RPC.
+     */
+    public async executeTool(name: string, args: any): Promise<any> {
+        if (!this.isConnected || !this.sessionId) {
+            throw new Error("MCP Client is not connected. Initiate a session first.");
+        }
 
-        const id = Date.now();
-        const resultPromise = new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                this._responseResolvers.delete(id);
-                reject(new Error(`Tool call '${name}' timed out.`));
-            }, 120000); // 2 minute timeout for missions
-
-            this._responseResolvers.set(id, (res) => {
-                clearTimeout(timeout);
-                resolve(res);
-            });
-        });
-
-        const response = await fetch(`${this._bridgeUrl}/messages?sessionId=${this._sessionId}`, {
+        const url = `${this.baseUrl}/messages?sessionId=${this.sessionId}`;
+        const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 jsonrpc: '2.0',
-                id: id,
                 method: 'tools/call',
-                params: { name, arguments: args }
+                params: { name, arguments: args },
+                id: Date.now()
             })
         });
 
-        if (!response.ok) throw new Error(`Tool call failed: ${response.statusText}`);
-        
-        // Await the response from the SSE stream
-        return resultPromise;
-    }
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Bridge Error (${response.status}): ${errorText}`);
+        }
 
-    public logStatus() {
-        this.outputChannel.appendLine(`[Status] Bridge URL: ${this._bridgeUrl}`);
-        this.outputChannel.appendLine(`[Status] Session ID: ${this._sessionId || 'Not Connected'}`);
-        this.outputChannel.show();
+        return await response.json();
     }
 
     public dispose() {
-        this._eventSource?.close();
-        this._onProgress.dispose();
-        this._onDisconnect.dispose();
-        this.outputChannel.dispose();
-    }
-
-    public get isConnected(): boolean {
-        return !!this._sessionId;
+        if (this.eventSource) {
+            this.eventSource.close();
+            this.isConnected = false;
+            this.outputChannel.appendLine('[MCP] Client disconnected.');
+        }
     }
 }

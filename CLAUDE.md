@@ -251,7 +251,7 @@ Merge `ai-enterprise-os` INTO `openrouter-crew-platform`. Use orc-p as base (bet
 |------|------|
 | p4-s1 | Multi-stage Docker build (Node 20 + Python 3.11) |
 | p4-s2 | `terraform plan` — AWS ECS + ElastiCache + Lambda (reuse orc-p Terraform) |
-| p4-s3 | Vercel deploy — alex-dashboard (zero-config Next.js) |
+| p4-s3 | (Deferred) Vercel deploy — alex-dashboard (zero-config Next.js) |
 | p4-s4 | AWS deploy — ECS Fargate (engine-api + mcp-bridge) via orc-p scripts |
 | p4-s4b| DNS Route53 — Dynamic subdomain routing (e.g., civic.pbradygeorgen.com) |
 | p4-s5 | `vsce publish` — VSCode marketplace (publisher: familiarcat) |

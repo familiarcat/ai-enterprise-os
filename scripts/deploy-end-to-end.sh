@@ -31,14 +31,7 @@ fi
 # ── 4. Deployment Build Validation (Chief O'Brien) ────────────────────────────
 echo "🏗️  Chief O'Brien: Validating Deployment Artifacts..."
 
-echo "  [1/2] Checking Vercel Dashboard Build..."
-pnpm --filter @apps/dashboard build > /tmp/vercel-build.log 2>&1 || {
-  echo "❌ Vercel build failed. Check /tmp/vercel-build.log"
-  exit 1
-}
-echo "  ✔ Vercel build nominal."
-
-echo "  [2/2] Checking EC2 Docker Image Build..."
+echo "  Checking EC2 Docker Image Build..."
 if command -v docker &>/dev/null; then
   docker build -t mcp-server:e2e-test -f "$ROOT/apps/api/Dockerfile" . > /tmp/docker-build.log 2>&1 || {
     echo "❌ Docker build failed. Check /tmp/docker-build.log"

@@ -2,7 +2,7 @@
 # Unified Credential Setup for AI Enterprise OS
 # This script ensures your local environment has the required keys and paths.
 
-ZSHRC="$HOME/.zshrc"
+ZSHRC="${HOME}/.zshrc"
 PROJECT_PATH="$(cd "$(dirname "$0")/../.." && pwd)"
 
 echo "--- Unifying AI Enterprise OS Credentials ---"
@@ -75,7 +75,7 @@ else
 fi
 
 # Source the file internally so the sync script can access the new variables immediately
-source "$ZSHRC"
+[[ -f "$ZSHRC" ]] && source "$ZSHRC" || echo "ℹ️  Skipping shell refresh: $ZSHRC not found."
 
 echo "--- Local Setup Done. ---"
 

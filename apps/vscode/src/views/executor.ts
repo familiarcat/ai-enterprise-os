@@ -28,5 +28,5 @@ export async function executeAgentTask(
   console.log(`[Captain Picard] Dispatching ${persona} mission via Bridge: ${context.task}`);
 
   // Dispatch to the bridge tool
-  return client.callTool('run_factory_mission', { context });
+  return client.executeTool('run_factory_mission', { context });
 }

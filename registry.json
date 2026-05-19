@@ -9,6 +9,7 @@
     ],
     "tier": "Production",
     "security_status": "VERIFIED / SECURE",
+    "trust_score": 100,
     "auditor": "Lt. Worf"
   },
   {
@@ -21,6 +22,7 @@
     ],
     "tier": "Strategic",
     "security_status": "VERIFIED / SECURE",
+    "trust_score": 100,
     "auditor": "Lt. Worf"
   },
   {
@@ -32,6 +34,7 @@
     ],
     "tier": "Communication",
     "security_status": "VERIFIED / SECURE",
+    "trust_score": 100,
     "auditor": "Lt. Worf"
   },
   {
@@ -43,6 +46,7 @@
     ],
     "tier": "Utility",
     "security_status": "VERIFIED / SECURE",
+    "trust_score": 100,
     "auditor": "Lt. Worf"
   },
   {
@@ -54,6 +58,7 @@
     ],
     "tier": "Standard",
     "security_status": "VERIFIED / SECURE",
+    "trust_score": 100,
     "auditor": "Lt. Worf"
   },
   {
@@ -65,6 +70,7 @@
     ],
     "tier": "Strategic",
     "security_status": "VERIFIED / SECURE",
+    "trust_score": 100,
     "auditor": "Lt. Worf"
   },
   {
@@ -77,6 +83,7 @@
     ],
     "tier": "Standard",
     "security_status": "VERIFIED / SECURE",
+    "trust_score": 100,
     "auditor": "Lt. Worf"
   },
   {
@@ -88,6 +95,7 @@
     ],
     "description": "Verified MCP tool discovered to support the captain_picard persona.",
     "security_status": "VERIFIED / SECURE",
+    "trust_score": 100,
     "integrated_by": "captain_picard",
     "timestamp": "2024-05-15T12:00:00.000Z"
   }

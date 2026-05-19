@@ -13,6 +13,7 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "types": ["node"],
     "jsx": "react-jsx",
     "outDir": "out",
     "rootDir": "."

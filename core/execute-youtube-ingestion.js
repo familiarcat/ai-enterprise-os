@@ -4,7 +4,7 @@ require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 async function runYoutubeBatchIngestion() {
   const urls = [
-    "https://www.youtube.com/watch?v=EsTrWCV0Ph4&t=2845s",
+    "https://www.youtube.com/watch?v=EsTrWCV0Ph4",
     // Add more URLs here to activate batch processing
   ];
   const project = process.env.ACTIVE_PROJECT_ID || 'architecture-evolution';
@@ -38,8 +38,27 @@ async function runYoutubeBatchIngestion() {
     return;
   }
 
-  // Phase 2: Synthetic Refactor Recommendations & ADR Generation
-  console.log("\n[Bridge] Requesting Commander Data to synthesize findings into an ADR...");
+  // Phase 2: Observation Lounge Discussion
+  console.log("\n[Captain Picard] Convening Observation Lounge for Synaptic Integration...");
+  
+  try {
+    const loungeResult = await handleToolCall('conduct_observation_lounge', {
+      context: summaries.join('\n\n---\n\n'),
+      focus: "Integration of MCP standards into ai-enterprise-os file structure and tool discovery logic."
+    }, {
+      notify: (m) => console.log(`  > ${m.data || m}`)
+    });
+
+    console.log("\n═══════════════════════════════════════════════════");
+    console.log("  OBSERVATION LOUNGE SESSION: MCP SYNAPTIC INTEGRATION");
+    console.log("═══════════════════════════════════════════════════");
+    console.log(loungeResult.debate);
+  } catch (err) {
+    console.error("\n❌ Lounge Session Failed:", err.message);
+  }
+
+  // Phase 3: ADR Generation
+  console.log("\n[Bridge] Requesting Commander Data to codify results...");
   
   const adrObjective = `
     [ADR GENERATION MISSION]: 

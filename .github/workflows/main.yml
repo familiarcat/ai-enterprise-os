@@ -11,14 +11,10 @@ on:
       - main
   workflow_dispatch:
     inputs:
-      target_app:
-        description: 'Target Vercel application to deploy'
+      rationale:
+        description: 'Rationale for this deployment'
         required: true
-        default: 'dashboard'
-        type: choice
-        options:
-          - dashboard
-          - civic
+        default: 'Automated deployment triggered by deploy_production tool.'
 
 env:
   # Ensure pnpm is used for all Node.js package management
@@ -32,7 +28,6 @@ jobs:
     permissions:
       contents: write # Required for stefanzweifel/git-auto-commit-action
       pull-requests: write # Optional, if you want to comment on PRs
-      id-token: write # Required for Vercel Action with OIDC
 
     steps:
       - name: Checkout Repository
@@ -57,10 +52,25 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
+          # Pin dependencies using the requirements.txt we just established
+          python -m pip install -r requirements.txt
           pnpm setup:python
 
       - name: Install Node.js dependencies
         run: pnpm install
+
+      - name: Bootstrap Factory Environment (.env)
+        run: |
+          echo "OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}" >> .env
+          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
+          echo "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" >> .env
+          echo "REDIS_URL=${{ secrets.REDIS_URL }}" >> .env
+          echo "PYTHON_BIN=python3" >> .env
+          echo "✔ Sovereign Factory .env initialized for CI."
+
+      - name: Verify Factory Environment Integrity
+        # Runs the Phase 0 Step 1 audit to ensure the .env we just built is valid
+        run: bash scripts/phase-0/p0-s1-env-check.sh
 
       - name: Run JavaScript Tests (Vitest)
         run: pnpm test
@@ -87,6 +97,9 @@ jobs:
       - name: Run Sensor Sweep Audit
         run: node core/orchestrator.js sensor_sweep
 
+      - name: Run Phase 0 Smoke Test
+        run: bash scripts/p0-s6-smoke-test.sh
+
       - name: Verify Worf Audit Integrity (E2E)
         run: |
           echo "import { runMission } from '../application/MissionService.js';" > domains/mission/domain/integrity-violation-test.js
@@ -98,37 +111,6 @@ jobs:
             echo "Success: Worf Audit correctly identified and blocked the violation."
           fi
           rm domains/mission/domain/integrity-violation-test.js
-
-      - name: Build Next.js Dashboard (Standard)
-        if: github.event.inputs.target_app == 'dashboard' || github.event_name == 'push'
-        run: pnpm --filter @apps/dashboard build
-
-      - name: Build Next.js Civic App
-        # Build civic if manually selected OR if files in civic domain changed on push
-        if: github.event.inputs.target_app == 'civic' || (github.event_name == 'push' && contains(github.event.head_commit.message, 'feat(civic)'))
-        run: pnpm --filter domains/civic/ui build
-
-      - name: Set Vercel Deployment Variables
-        id: set-vercel-vars
-        run: |
-          if [[ "${{ github.event.inputs.target_app }}" == "civic" ]]; then
-            echo "VERCEL_ORG_ID_TO_DEPLOY=${{ secrets.VERCEL_ORG_ID_CIVIC }}" >> $GITHUB_ENV
-            echo "VERCEL_PROJECT_ID_TO_DEPLOY=${{ secrets.VERCEL_PROJECT_ID_CIVIC }}" >> $GITHUB_ENV
-            echo "VERCEL_ROOT_DIRECTORY=domains/civic/ui" >> $GITHUB_ENV
-          else
-            echo "VERCEL_ORG_ID_TO_DEPLOY=${{ secrets.VERCEL_ORG_ID }}" >> $GITHUB_ENV
-            echo "VERCEL_PROJECT_ID_TO_DEPLOY=${{ secrets.VERCEL_PROJECT_ID }}" >> $GITHUB_ENV
-            echo "VERCEL_ROOT_DIRECTORY=apps/dashboard" >> $GITHUB_ENV
-          fi
-
-      - name: Deploy Frontend to Vercel
-        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ env.VERCEL_ORG_ID_TO_DEPLOY }}
-          vercel-project-id: ${{ env.VERCEL_PROJECT_ID_TO_DEPLOY }}
-          root-directory: ${{ env.VERCEL_ROOT_DIRECTORY }}
 
       - name: Build Docker Image for MCP Server
         run: |
@@ -148,6 +130,7 @@ jobs:
             docker build -t mcp-server:latest -f apps/api/Dockerfile .
             docker stop mcp-server || true
             docker rm mcp-server || true
+            echo "Deployment Rationale: ${{ github.event.inputs.rationale }}"
             docker run -d --name mcp-server -p 3002:3002 --restart always \
               -e OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }} \
               -e SUPABASE_URL=${{ secrets.SUPABASE_URL }} \

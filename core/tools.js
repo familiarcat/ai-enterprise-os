@@ -10,7 +10,7 @@ const TOOL_DEFINITIONS = [
   {
     name: "search_code",
     description: "Search for functions, classes, or patterns in a zip or folder",
-    inputSchema: {
+    inputSchema: { // Now powered by TypeScript
       type: "object",
       properties: {
         path: { type: "string" },
@@ -215,8 +215,49 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: "deploy_production",
-    description: "Trigger production deployment for a specific domain (e.g., civic)",
-    inputSchema: { type: "object", properties: { domain: { type: "string" }, rationale: { type: "string" } }, required: ["domain", "rationale"] }
+    description: "Trigger full system production deployment to AWS EC2.",
+    inputSchema: { type: "object", properties: { rationale: { type: "string" } }, required: ["rationale"] }
+  },
+  {
+    name: "ingest_youtube_batch",
+    description: "Batch ingest multiple YouTube videos to extract a sphere of knowledge on a topic.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        urls: { type: "array", items: { type: "string" } },
+        topic: { type: "string" },
+        project: { type: "string" },
+        persona: { type: "string" }
+      },
+      required: ["urls", "topic"]
+    }
+  },
+  {
+    name: "run_hierarchical_mission",
+    description: "Execute a complex mission where a manager persona coordinates multiple crew members sequentially to build a unified resolution.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        objective: { type: "string" },
+        manager_persona: { type: "string", default: "captain_picard" },
+        crew: { type: "array", items: { type: "string" }, description: "Persona handles to involve in the sequence" },
+        project_context: { type: "string" }
+      },
+      required: ["objective", "crew"]
+    }
+  },
+  {
+    name: "conduct_pedagogical_debate",
+    description: "Convene the crew for a structured debate on ingested knowledge to build a pedagogical resolution and action plan.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        topic: { type: "string" },
+        context: { type: "string", description: "The ingested material or summary to debate" },
+        crew: { type: "array", items: { type: "string" }, description: "Optional crew handles" }
+      },
+      required: ["topic", "context"]
+    }
   },
   {
     name: "crew_roll_call",

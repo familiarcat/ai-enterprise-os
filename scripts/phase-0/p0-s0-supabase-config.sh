@@ -21,9 +21,20 @@ echo "  This script will update your Supabase credentials."
 echo "  You can find these in the Supabase Dashboard -> Settings -> API."
 echo ""
 
-read -p "  Enter Supabase Project URL (https://xxx.supabase.co): " SUPA_URL
-read -p "  Enter Supabase Public Key (formerly anon): " PUB_KEY
-read -p "  Enter Supabase Service Role Key (secret): " SR_KEY
+# Use existing env vars if present (CI mode), otherwise prompt (Local mode)
+SUPA_URL="${SUPABASE_URL:-}"
+PUB_KEY="${SUPABASE_PUBLIC_KEY:-}"
+SR_KEY="${SUPABASE_SERVICE_ROLE_KEY:-$SUPABASE_KEY}"
+
+if [[ -z "$SUPA_URL" || -z "$PUB_KEY" || -z "$SR_KEY" ]]; then
+  if [[ "${CI:-false}" == "true" ]]; then
+    echo "  ✗ Error: Missing Supabase secrets in CI environment."
+    exit 1
+  fi
+  read -p "  Enter Supabase Project URL (https://xxx.supabase.co): " SUPA_URL
+  read -p "  Enter Supabase Public Key (formerly anon): " PUB_KEY
+  read -p "  Enter Supabase Service Role Key (secret): " SR_KEY
+fi
 
 if [[ -z "$SUPA_URL" || -z "$PUB_KEY" || -z "$SR_KEY" ]]; then
   echo "  ✗ Error: Both keys are required."
